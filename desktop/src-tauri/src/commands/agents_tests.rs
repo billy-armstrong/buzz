@@ -521,6 +521,64 @@ fn tauri_platform_configs_bundle_kubernetes_only_on_supported_hosts() {
 }
 
 #[test]
+fn current_build_deploy_payload_forwards_compiled_policy() {
+    use crate::managed_agents::{BackendKind, RespondTo};
+
+    let expected_owner_only = match std::env::var("BUZZ_TEST_EXPECTED_AGENT_ACCESS_OWNER_ONLY") {
+        Ok(value) => value
+            .parse::<bool>()
+            .expect("BUZZ_TEST_EXPECTED_AGENT_ACCESS_OWNER_ONLY must be true or false"),
+        Err(std::env::VarError::NotPresent) if !crate::managed_agents::internal_build() => false,
+        Err(std::env::VarError::NotPresent) => {
+            panic!(
+                "BUZZ_TEST_EXPECTED_AGENT_ACCESS_OWNER_ONLY must be set for internal-build tests"
+            )
+        }
+        Err(std::env::VarError::NotUnicode(_)) => {
+            panic!("BUZZ_TEST_EXPECTED_AGENT_ACCESS_OWNER_ONLY must be valid UTF-8")
+        }
+    };
+    let mut record = bare_agent_record(None, None, None);
+    record.backend = BackendKind::Provider {
+        id: "provider".to_string(),
+        config: serde_json::json!({}),
+    };
+    record.respond_to = RespondTo::Anyone;
+    record.respond_to_allowlist = vec!["a".repeat(64)];
+
+    let payload = deploy_payload_json_for_current_build(
+        &record,
+        "wss://relay.example".to_string(),
+        None,
+        None,
+        None,
+        std::collections::BTreeMap::new(),
+        // The compiled access policy is the subject here; the launch block is
+        // exercised by the shared provider fixture test above.
+        serde_json::Value::Null,
+    );
+    let expected_mode = if expected_owner_only {
+        "owner-only"
+    } else {
+        "anyone"
+    };
+
+    assert_eq!(
+        payload["respond_to"], expected_mode,
+        "current-build deploy payload did not forward the compiled policy",
+    );
+    let expected_allowlist = if expected_owner_only {
+        serde_json::json!([])
+    } else {
+        serde_json::json!(["a".repeat(64)])
+    };
+    assert_eq!(
+        payload["respond_to_allowlist"], expected_allowlist,
+        "current-build deploy payload did not apply the compiled policy to the stale allowlist",
+    );
+}
+
+#[test]
 fn internal_deploy_payload_clamps_stale_access() {
     use crate::managed_agents::{BackendKind, RespondTo};
 

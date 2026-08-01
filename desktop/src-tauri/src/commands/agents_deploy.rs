@@ -138,7 +138,7 @@ pub(super) fn build_deploy_payload(
         &owner_pubkey,
     );
 
-    Ok(deploy_payload_json(
+    Ok(deploy_payload_json_for_current_build(
         record,
         crate::relay::effective_agent_relay_url(
             &record.relay_url,
@@ -149,8 +149,29 @@ pub(super) fn build_deploy_payload(
         effective.system_prompt.value,
         merged_user_env,
         launch,
-        crate::managed_agents::internal_build(),
     ))
+}
+
+/// Serialize a deploy payload using this build's managed-agent access policy.
+pub(super) fn deploy_payload_json_for_current_build(
+    record: &ManagedAgentRecord,
+    relay_url: String,
+    effective_model: Option<String>,
+    effective_provider: Option<String>,
+    effective_prompt: Option<String>,
+    merged_env: BTreeMap<String, String>,
+    launch: serde_json::Value,
+) -> serde_json::Value {
+    deploy_payload_json(
+        record,
+        relay_url,
+        effective_model,
+        effective_provider,
+        effective_prompt,
+        merged_env,
+        launch,
+        crate::managed_agents::internal_build(),
+    )
 }
 
 /// Pure serialization half of [`build_deploy_payload`]. Legacy top-level fields
