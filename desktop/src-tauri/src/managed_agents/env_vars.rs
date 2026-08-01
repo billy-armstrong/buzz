@@ -71,11 +71,12 @@ pub(crate) const RESERVED_ENV_KEYS: &[&str] = &[
     "BUZZ_ACP_AGENT_COMMAND",
     "BUZZ_ACP_AGENT_ARGS",
     "BUZZ_ACP_MCP_COMMAND",
-    // Security gates: respond-to mode + allowlist + legacy owner-only
-    // fallback. Overriding would make the running agent's gate diverge
-    // from the saved/UI-visible settings.
+    // Security gates: respond-to mode + allowlist + deployment allowlist +
+    // legacy owner-only fallback. Overriding would make the running agent's
+    // gate diverge from the saved/UI-visible settings.
     "BUZZ_ACP_RESPOND_TO",
     "BUZZ_ACP_RESPOND_TO_ALLOWLIST",
+    "BUZZ_ACP_ALLOWED_RESPOND_TO",
     "BUZZ_ACP_AGENT_OWNER",
     // Remote lifetime/presence policy: user env must not disable the
     // desktop/provider-owned bounds while the saved record still promises them.

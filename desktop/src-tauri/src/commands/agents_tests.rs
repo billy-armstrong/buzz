@@ -411,6 +411,21 @@ fn legacy_avatar_empty_when_nothing_resolves() {
 
 // ── Provider deploy payload completeness ─────────────────────────────────────
 
+fn deploy_payload_for_policy(record: &ManagedAgentRecord, internal: bool) -> serde_json::Value {
+    deploy_payload_json(
+        record,
+        "wss://relay.example".to_string(),
+        Some("gpt-x".to_string()),
+        Some("openai".to_string()),
+        None,
+        std::collections::BTreeMap::new(),
+        // Access projection is the subject here; the launch block is exercised
+        // by the shared provider fixture test below.
+        serde_json::Value::Null,
+        internal,
+    )
+}
+
 /// The shared provider fixture is the contract arbiter: it must be the exact
 /// richest deploy request produced by the real desktop serializers.
 #[test]
@@ -470,6 +485,9 @@ fn deploy_payload_matches_the_shared_full_launch_fixture() {
         None,
         std::collections::BTreeMap::from([("USER_KEY".into(), "user-value".into())]),
         launch,
+        // Fixture asserts the record's own access fields survive, so the
+        // owner-only projection must be off for this comparison.
+        false,
     );
 
     assert_eq!(
@@ -500,4 +518,29 @@ fn tauri_platform_configs_bundle_kubernetes_only_on_supported_hosts() {
             "unexpected Kubernetes externalBin for {target}; merged {paths:?}"
         );
     }
+}
+
+#[test]
+fn internal_deploy_payload_clamps_stale_access() {
+    use crate::managed_agents::{BackendKind, RespondTo};
+
+    let mut record = bare_agent_record(None, None, None);
+    record.backend = BackendKind::Provider {
+        id: "provider".to_string(),
+        config: serde_json::json!({}),
+    };
+    record.respond_to = RespondTo::Anyone;
+    record.respond_to_allowlist = vec!["a".repeat(64)];
+
+    let payload = deploy_payload_for_policy(&record, true);
+
+    assert_eq!(
+        payload["respond_to"], "owner-only",
+        "internal deploy payload widened stale access"
+    );
+    assert_eq!(
+        payload["respond_to_allowlist"],
+        serde_json::json!([]),
+        "internal deploy payload retained a stale allowlist"
+    );
 }

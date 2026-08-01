@@ -72,6 +72,9 @@ const RESPOND_TO_OPTIONS: PersonaDropdownOption[] = [
   { label: "Selected people", value: "allowlist" },
 ];
 
+export const INTERNAL_AGENT_ACCESS_DISABLED_REASON =
+  "This build limits agents to messages from you, so the access level cannot be changed.";
+
 export function CreateAgentRespondToField({
   mode,
   allowlist,
@@ -79,6 +82,7 @@ export function CreateAgentRespondToField({
   onAllowlistChange,
   ownerPubkey,
   disabled,
+  disabledReason,
   variant,
   runLocation,
 }: {
@@ -93,6 +97,8 @@ export function CreateAgentRespondToField({
    */
   ownerPubkey?: string | null;
   disabled?: boolean;
+  /** Explanation shown when this access control is unavailable. */
+  disabledReason?: string;
   /** When "persona", uses PersonaDropdownField styling to match the persona dialog. */
   variant?: "default" | "persona";
   /**
@@ -219,6 +225,14 @@ export function CreateAgentRespondToField({
           ))}
         </select>
       )}
+      {disabledReason ? (
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="agent-respond-to-disabled-reason"
+        >
+          {disabledReason}
+        </p>
+      ) : null}
       {mode === "anyone" ? accessWarning : null}
       {mode === "owner-only" ? (
         <p className="text-xs text-muted-foreground">

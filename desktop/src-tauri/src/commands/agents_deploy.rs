@@ -149,11 +149,13 @@ pub(super) fn build_deploy_payload(
         effective.system_prompt.value,
         merged_user_env,
         launch,
+        crate::managed_agents::internal_build(),
     ))
 }
 
 /// Pure serialization half of [`build_deploy_payload`]. Legacy top-level fields
 /// remain for display/bookkeeping; providers execute the resolved `launch` block.
+#[allow(clippy::too_many_arguments)]
 pub(super) fn deploy_payload_json(
     record: &ManagedAgentRecord,
     relay_url: String,
@@ -162,7 +164,10 @@ pub(super) fn deploy_payload_json(
     effective_prompt: Option<String>,
     merged_env: BTreeMap<String, String>,
     launch: serde_json::Value,
+    internal: bool,
 ) -> serde_json::Value {
+    let (respond_to, respond_to_allowlist) =
+        crate::managed_agents::projected_access_with_policy(record, internal);
     serde_json::json!({
         "name": &record.name,
         "relay_url": relay_url,
@@ -177,8 +182,8 @@ pub(super) fn deploy_payload_json(
         "idle_timeout_seconds": record.idle_timeout_seconds,
         "max_turn_duration_seconds": record.max_turn_duration_seconds,
         "parallelism": record.parallelism,
-        "respond_to": record.respond_to,
-        "respond_to_allowlist": &record.respond_to_allowlist,
+        "respond_to": respond_to,
+        "respond_to_allowlist": respond_to_allowlist,
         "env_vars": merged_env,
         "launch": launch,
     })

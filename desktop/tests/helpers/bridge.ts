@@ -448,6 +448,7 @@ type MockBridgeOptions = {
     model: string | null;
     preferred_runtime?: string | null;
   };
+  internalBuild?: boolean;
   /** File-layer config returned by runtime id. */
   runtimeFileConfigs?: Record<
     string,

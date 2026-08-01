@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import {
   useAcpRuntimesQuery,
+  useAgentAccessOwnerOnlyQuery,
   useAgentConfigSurface,
   useBakedBuildEnvKeysQuery,
   usePersonasQuery,
@@ -62,9 +63,9 @@ import {
   type RuntimeModelProviderSelection,
 } from "./runtimeModelProviderSelection";
 import { AgentCreationPreview } from "./AgentCreationPreview";
+import { InternalAgentAccessField } from "./InternalAgentAccessField";
 import type { EnvVarsValue } from "./EnvVarsEditor";
 import { useRequiredCredentialState } from "./useRequiredCredentialState";
-import { CreateAgentRespondToField } from "./RespondToField";
 import { PersonaDropdownField } from "./PersonaDropdownField";
 import {
   MODEL_DISCOVERY_LOADING_VALUE,
@@ -394,6 +395,9 @@ export function AgentInstanceEditDialog({
     });
 
   const { data: bakedEnvKeys } = useBakedBuildEnvKeysQuery({ enabled: open });
+  const { data: agentAccessOwnerOnly } = useAgentAccessOwnerOnlyQuery({
+    enabled: open,
+  });
 
   // Merge global env as the base layer so credential keys satisfied via global
   // config (e.g. ANTHROPIC_API_KEY) are available to model discovery. Use
@@ -907,7 +911,6 @@ export function AgentInstanceEditDialog({
             )}
           </div>
           <div className="space-y-5">
-            {/* Agent name */}
             <div className="space-y-1.5">
               <label
                 className="text-sm font-medium text-foreground"
@@ -935,17 +938,14 @@ export function AgentInstanceEditDialog({
                 />
               </div>
             </div>
-
-            {/* Who can send instructions */}
-            <CreateAgentRespondToField
+            <InternalAgentAccessField
+              accessLocked={agentAccessOwnerOnly === true}
               allowlist={respondToAllowlist}
               disabled={updateMutation.isPending}
               mode={respondTo}
               onAllowlistChange={setRespondToAllowlist}
               onModeChange={setRespondTo}
-              variant="persona"
             />
-
             {/* Provider (runtime) */}
             <div className="space-y-1.5">
               <label

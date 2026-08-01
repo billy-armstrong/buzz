@@ -10,6 +10,7 @@ import {
   listManagedAgents,
   updateManagedAgent,
 } from "@/shared/api/tauri";
+import { getAgentAccessOwnerOnly } from "@/shared/api/tauriAgentAccess";
 import { getGlobalAgentConfig } from "@/shared/api/tauriGlobalAgentConfig";
 import { listPersonas, setPersonaActive } from "@/shared/api/tauriPersonas";
 import type {
@@ -260,6 +261,27 @@ export function welcomeStarterRuntimeUpdate(
   };
 }
 
+export function welcomeTeammateHasExpectedAccess(
+  teammate: ManagedAgent,
+  leadPubkey: string,
+  agentAccessOwnerOnly: boolean,
+) {
+  if (agentAccessOwnerOnly) {
+    // Welcome teammates are created owner-only, and the lead remains authorized
+    // as a NIP-OA-verified sibling because every Welcome agent shares one owner.
+    return (
+      teammate.respondTo === "owner-only" &&
+      teammate.respondToAllowlist.length === 0
+    );
+  }
+  return (
+    teammate.respondTo === "allowlist" &&
+    teammate.respondToAllowlist.some(
+      (pubkey) => normalizePubkey(pubkey) === normalizePubkey(leadPubkey),
+    )
+  );
+}
+
 /**
  * Ensure the complete built-in Welcome Team is ready for kickoff.
  * The team itself is Rust-seeded; this only activates personas, creates any
@@ -271,11 +293,13 @@ async function provisionWelcomeTeam(
 ): Promise<WelcomeTeamAgents> {
   const existingAgents = await listManagedAgents();
   await ensureWelcomeTeamPersonasActive();
-  const [personas, runtimeCatalog, globalConfig] = await Promise.all([
-    listPersonas(),
-    discoverAcpRuntimes(),
-    getGlobalAgentConfig(),
-  ]);
+  const [personas, runtimeCatalog, globalConfig, agentAccessOwnerOnly] =
+    await Promise.all([
+      listPersonas(),
+      discoverAcpRuntimes(),
+      getGlobalAgentConfig(),
+      getAgentAccessOwnerOnly(),
+    ]);
   const personasById = new Map(
     personas.map((persona) => [persona.id, persona]),
   );
@@ -322,11 +346,11 @@ async function provisionWelcomeTeam(
   const leadPubkey = lead.pubkey;
   for (const index of [1, 2] as const) {
     const teammate = welcomeAgents[index];
-    const alreadyAllowsLead =
-      teammate.respondTo === "allowlist" &&
-      teammate.respondToAllowlist.some(
-        (pubkey) => normalizePubkey(pubkey) === normalizePubkey(leadPubkey),
-      );
+    const alreadyAllowsLead = welcomeTeammateHasExpectedAccess(
+      teammate,
+      leadPubkey,
+      agentAccessOwnerOnly,
+    );
     if (!alreadyAllowsLead) {
       const updated = await updateManagedAgent({
         pubkey: teammate.pubkey,
