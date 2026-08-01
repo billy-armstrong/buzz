@@ -117,7 +117,7 @@ fn unknown_command_returns_none() {
 
 // ── build_respond_to_env tests ───────────────────────────────────────
 
-use super::test_fixtures::fixture;
+use super::test_fixtures::{expected_mode, expected_owner_only, fixture};
 use super::{build_respond_to_env, build_respond_to_env_with_policy};
 use crate::managed_agents::types::{ManagedAgentRecord, RespondTo};
 
@@ -132,8 +132,18 @@ fn build_env_owner_only_sets_mode_and_removes_others() {
     );
     assert!(!set_map.contains_key("BUZZ_ACP_RESPOND_TO_ALLOWLIST"));
     assert!(remove.contains(&"BUZZ_ACP_RESPOND_TO_ALLOWLIST"));
-    assert!(!set_map.contains_key("BUZZ_ACP_ALLOWED_RESPOND_TO"));
-    assert!(remove.contains(&"BUZZ_ACP_ALLOWED_RESPOND_TO"));
+    if expected_owner_only() {
+        assert_eq!(
+            set_map
+                .get("BUZZ_ACP_ALLOWED_RESPOND_TO")
+                .map(String::as_str),
+            Some("owner-only")
+        );
+        assert!(!remove.contains(&"BUZZ_ACP_ALLOWED_RESPOND_TO"));
+    } else {
+        assert!(!set_map.contains_key("BUZZ_ACP_ALLOWED_RESPOND_TO"));
+        assert!(remove.contains(&"BUZZ_ACP_ALLOWED_RESPOND_TO"));
+    }
     // auth_tag is present → no AGENT_OWNER fallback fires.
     assert!(remove.contains(&"BUZZ_ACP_AGENT_OWNER"));
 }
@@ -153,14 +163,19 @@ fn build_env_allowlist_sets_both_envs_and_joins() {
     let set_map: std::collections::HashMap<_, _> = set.into_iter().collect();
     assert_eq!(
         set_map.get("BUZZ_ACP_RESPOND_TO").map(String::as_str),
-        Some("allowlist")
+        Some(expected_mode("allowlist")),
+        "runtime wrapper did not apply the declared build policy",
     );
-    assert_eq!(
-        set_map
-            .get("BUZZ_ACP_RESPOND_TO_ALLOWLIST")
-            .map(String::as_str),
-        Some(format!("{a},{b}").as_str()),
-    );
+    if expected_owner_only() {
+        assert!(!set_map.contains_key("BUZZ_ACP_RESPOND_TO_ALLOWLIST"));
+    } else {
+        assert_eq!(
+            set_map
+                .get("BUZZ_ACP_RESPOND_TO_ALLOWLIST")
+                .map(String::as_str),
+            Some(format!("{a},{b}").as_str()),
+        );
+    }
 }
 
 #[test]
@@ -170,7 +185,8 @@ fn build_env_anyone_omits_allowlist_var() {
     let set_map: std::collections::HashMap<_, _> = set.into_iter().collect();
     assert_eq!(
         set_map.get("BUZZ_ACP_RESPOND_TO").map(String::as_str),
-        Some("anyone")
+        Some(expected_mode("anyone")),
+        "runtime wrapper did not apply the declared build policy",
     );
     assert!(!set_map.contains_key("BUZZ_ACP_RESPOND_TO_ALLOWLIST"));
     assert!(remove.contains(&"BUZZ_ACP_RESPOND_TO_ALLOWLIST"));
@@ -236,8 +252,17 @@ fn build_env_rejects_corrupted_allowlist() {
 #[test]
 fn build_env_rejects_empty_allowlist_in_allowlist_mode() {
     let rec = fixture(RespondTo::Allowlist, vec![], Some("tag".into()));
-    let err = build_respond_to_env(&rec, Some("owner")).unwrap_err();
-    assert!(err.contains("at least one pubkey"));
+    if expected_owner_only() {
+        let (set, _) = build_respond_to_env(&rec, Some("owner")).unwrap();
+        let set_map: std::collections::HashMap<_, _> = set.into_iter().collect();
+        assert_eq!(
+            set_map.get("BUZZ_ACP_RESPOND_TO").map(String::as_str),
+            Some("owner-only")
+        );
+    } else {
+        let err = build_respond_to_env(&rec, Some("owner")).unwrap_err();
+        assert!(err.contains("at least one pubkey"));
+    }
 }
 
 // ── persona fixture helpers ─────────────────────────────────────────
