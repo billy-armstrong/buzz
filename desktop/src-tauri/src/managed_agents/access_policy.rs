@@ -38,12 +38,8 @@ pub(crate) fn build_respond_to_env_with_policy(
     owner_hex: Option<&str>,
     enforced_owner_only: bool,
 ) -> Result<RespondToEnv, String> {
-    let (respond_to, normalized) = projected_access_with_policy(record, enforced_owner_only);
-    let normalized = if enforced_owner_only {
-        normalized
-    } else {
-        validate_respond_to_allowlist(&normalized)?
-    };
+    let (respond_to, _) = projected_access_with_policy(record, enforced_owner_only);
+    let normalized = validate_respond_to_allowlist(&record.respond_to_allowlist)?;
     if respond_to == RespondTo::Allowlist && normalized.is_empty() {
         return Err(
             "respond-to mode 'allowlist' requires at least one pubkey in the allowlist".to_string(),
@@ -94,8 +90,22 @@ mod tests {
         .unwrap();
         record.backend = backend;
         record.respond_to = RespondTo::Anyone;
-        record.respond_to_allowlist = vec!["malformed stale allowlist".into()];
+        record.respond_to_allowlist = vec!["a".repeat(64)];
         record
+    }
+
+    #[test]
+    fn internal_policy_rejects_malformed_stored_allowlist_before_clamping() {
+        let mut record = record(BackendKind::Local);
+        record.respond_to_allowlist = vec!["malformed stale allowlist".into()];
+
+        let error = build_respond_to_env_with_policy(&record, Some("owner"), true)
+            .expect_err("internal policy accepted a malformed stored allowlist");
+
+        assert!(
+            error.contains("invalid pubkey in respond-to allowlist"),
+            "internal policy returned the wrong malformed-allowlist error: {error}",
+        );
     }
 
     #[test]
