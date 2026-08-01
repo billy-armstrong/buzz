@@ -108,7 +108,6 @@ async fn clear_initial_window_backing<R: tauri::Runtime>(window: &tauri::Window<
 async fn wait_for_stable_initial_window_geometry<R: tauri::Runtime>(window: &tauri::Window<R>) {
     const MAX_POLLS: usize = 120;
     const REQUIRED_STABLE_POLLS: usize = 4;
-
     let mut previous_bounds = None;
     let mut stable_polls = 0;
 
