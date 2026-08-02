@@ -105,6 +105,170 @@ void main() {
     );
   });
 
+  test('queryRelay arms the rate-limit gate from a 429 retry hint', () async {
+    final gateTimers = <_ManualTimer>[];
+    final gate = RelayRateLimitGate(
+      now: () => DateTime(2026),
+      timerFactory: (duration, callback) {
+        final timer = _ManualTimer(duration, callback);
+        gateTimers.add(timer);
+        return timer;
+      },
+    );
+    const body = '{"error":"rate-limited: quota exceeded; retry in 4s"}';
+    final harness = _queryHarness(
+      gate: gate,
+      client: http_testing.MockClient((_) async => http.Response(body, 429)),
+    );
+    addTearDown(harness.container.dispose);
+
+    await expectLater(
+      harness.session.queryRelay(const []),
+      throwsA(
+        isA<RelayException>()
+            .having((error) => error.statusCode, 'statusCode', 429)
+            .having((error) => error.body, 'body', body),
+      ),
+    );
+
+    expect(gateTimers.single.duration, const Duration(seconds: 4));
+    expect(gate.isActive, isTrue);
+  });
+
+  test('queryRelay uses the default gate for a 503 without a hint', () async {
+    final gateTimers = <_ManualTimer>[];
+    final gate = RelayRateLimitGate(
+      now: () => DateTime(2026),
+      timerFactory: (duration, callback) {
+        final timer = _ManualTimer(duration, callback);
+        gateTimers.add(timer);
+        return timer;
+      },
+    );
+    const body = '{"error":"rate-limited: shared admission unavailable"}';
+    final harness = _queryHarness(
+      gate: gate,
+      client: http_testing.MockClient((_) async => http.Response(body, 503)),
+    );
+    addTearDown(harness.container.dispose);
+
+    await expectLater(
+      harness.session.queryRelay(const []),
+      throwsA(
+        isA<RelayException>()
+            .having((error) => error.statusCode, 'statusCode', 503)
+            .having((error) => error.body, 'body', body),
+      ),
+    );
+
+    expect(gateTimers.single.duration, const Duration(seconds: 10));
+    expect(gate.isActive, isTrue);
+  });
+
+  test('queryRelay does not arm the gate for a non-rate-limit error', () async {
+    final gateTimers = <_ManualTimer>[];
+    final gate = RelayRateLimitGate(
+      now: () => DateTime(2026),
+      timerFactory: (duration, callback) {
+        final timer = _ManualTimer(duration, callback);
+        gateTimers.add(timer);
+        return timer;
+      },
+    );
+    const body = '{"error":"not found"}';
+    final harness = _queryHarness(
+      gate: gate,
+      client: http_testing.MockClient((_) async => http.Response(body, 404)),
+    );
+    addTearDown(harness.container.dispose);
+
+    await expectLater(
+      harness.session.queryRelay(const []),
+      throwsA(
+        isA<RelayException>()
+            .having((error) => error.statusCode, 'statusCode', 404)
+            .having((error) => error.body, 'body', body),
+      ),
+    );
+
+    expect(gateTimers, isEmpty);
+    expect(gate.isActive, isFalse);
+  });
+
+  test('queryRelay preserves an error with an unrecognized body', () async {
+    final gateTimers = <_ManualTimer>[];
+    final gate = RelayRateLimitGate(
+      now: () => DateTime(2026),
+      timerFactory: (duration, callback) {
+        final timer = _ManualTimer(duration, callback);
+        gateTimers.add(timer);
+        return timer;
+      },
+    );
+    const body = 'upstream unavailable';
+    final harness = _queryHarness(
+      gate: gate,
+      client: http_testing.MockClient((_) async => http.Response(body, 503)),
+    );
+    addTearDown(harness.container.dispose);
+
+    await expectLater(
+      harness.session.queryRelay(const []),
+      throwsA(
+        isA<RelayException>()
+            .having((error) => error.statusCode, 'statusCode', 503)
+            .having((error) => error.body, 'body', body),
+      ),
+    );
+
+    expect(gateTimers, isEmpty);
+    expect(gate.isActive, isFalse);
+  });
+
+  test('queryRelay success does not arm the rate-limit gate', () async {
+    final gateTimers = <_ManualTimer>[];
+    final gate = RelayRateLimitGate(
+      now: () => DateTime(2026),
+      timerFactory: (duration, callback) {
+        final timer = _ManualTimer(duration, callback);
+        gateTimers.add(timer);
+        return timer;
+      },
+    );
+    final harness = _queryHarness(
+      gate: gate,
+      client: http_testing.MockClient((_) async => http.Response('[]', 200)),
+    );
+    addTearDown(harness.container.dispose);
+
+    expect(await harness.session.queryRelay(const []), isEmpty);
+    expect(gateTimers, isEmpty);
+    expect(gate.isActive, isFalse);
+  });
+
+  test('queryRelay does not wait for an active rate-limit gate', () async {
+    final gate = RelayRateLimitGate(
+      now: () => DateTime(2026),
+      timerFactory: _ManualTimer.new,
+    );
+    var requestCount = 0;
+    final harness = _queryHarness(
+      gate: gate,
+      client: http_testing.MockClient((_) async {
+        requestCount++;
+        return http.Response('[]', 200);
+      }),
+    );
+    addTearDown(harness.container.dispose);
+    gate.activate(4);
+
+    final query = harness.session.queryRelay(const []);
+    await Future<void>.delayed(Duration.zero);
+
+    expect(requestCount, 1);
+    expect(await query, isEmpty);
+  });
+
   test(
     'history timeout rejects instead of returning partial empty data',
     () async {
@@ -920,6 +1084,33 @@ void main() {
     expect(closedMessages, ['restricted: no longer valid']);
     unsubscribe();
   });
+}
+
+class _QueryHarness {
+  final ProviderContainer container;
+  final RelaySessionNotifier session;
+
+  _QueryHarness({required this.container, required this.session});
+}
+
+_QueryHarness _queryHarness({
+  required RelayRateLimitGate gate,
+  required http.Client client,
+}) {
+  final session = RelaySessionNotifier(httpClient: client, rateLimitGate: gate);
+  final container = ProviderContainer(
+    overrides: [
+      relaySessionProvider.overrideWith(() => session),
+      relayConfigProvider.overrideWith(
+        () => _FakeRelayConfigNotifier(
+          baseUrl: 'https://relay.example',
+          nsec: nostr.Keys.generate().nsec,
+        ),
+      ),
+    ],
+  );
+  container.read(relaySessionProvider);
+  return _QueryHarness(container: container, session: session);
 }
 
 class _FakeAuthNotifier extends AuthNotifier {

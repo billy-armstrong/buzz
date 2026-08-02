@@ -184,6 +184,7 @@ class RelaySessionNotifier extends Notifier<SessionState> {
           if (shouldCloseClient) client.close();
         });
     if (response.statusCode < 200 || response.statusCode >= 300) {
+      _activateRateLimitGateFromHttpError(response.body);
       throw RelayException(response.statusCode, response.body);
     }
     final decoded = jsonDecode(response.body);
@@ -202,6 +203,22 @@ class RelaySessionNotifier extends Notifier<SessionState> {
       if (error is FormatException) rethrow;
       throw FormatException('relay returned malformed query event: $error');
     }
+  }
+
+  void _activateRateLimitGateFromHttpError(String body) {
+    final dynamic decoded;
+    try {
+      decoded = jsonDecode(body);
+    } on FormatException {
+      return;
+    }
+    if (decoded is! Map<String, dynamic>) return;
+    final message = decoded['error'];
+    if (message is! String ||
+        classifyRelayClosed(message) != RelayClosedClass.rateLimited) {
+      return;
+    }
+    _rateLimitGate.activate(parseRateLimitRetrySeconds(message));
   }
 
   /// Fetch historical events matching [filter]. Sends REQ, collects events
