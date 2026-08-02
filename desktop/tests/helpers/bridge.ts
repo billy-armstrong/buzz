@@ -536,9 +536,11 @@ type MockBridgeOptions = {
    */
   backendProviderProbeResult?: Record<string, unknown>;
   /**
-   * Delay (ms) applied to `probe_backend_provider` so a spec can type into
-   * provider config fields while the probe is still in flight (pins the
-   * latest-state merge on probe resolution).
+   * Delay (ms) applied to `probe_backend_provider` so a spec can assert the
+   * pre-resolution state (config fields stay probe-gated until the result
+   * lands). Typing while a probe is in flight is unreachable through the UI
+   * for the same reason; that merge path is pinned at the unit level
+   * (`applyProbeResult` in whereToRunIntent.test.mjs).
    */
   backendProviderProbeDelayMs?: number;
 };
