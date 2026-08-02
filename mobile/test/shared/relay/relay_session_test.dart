@@ -260,13 +260,21 @@ void main() {
       }),
     );
     addTearDown(harness.container.dispose);
+    // Let the provider's build/dispose churn settle before arming: reading the
+    // notifier registers `ref.onDispose(_dispose)`, and `_dispose` resets the
+    // shared gate. Arming before that settles leaves the gate disarmed by the
+    // time the request runs, which makes this row pass for the wrong reason.
+    await pumpEventQueue();
     gate.activate(4);
+    expect(gate.isActive, isTrue);
 
     final query = harness.session.queryRelay(const []);
     await Future<void>.delayed(Duration.zero);
 
     expect(requestCount, 1);
     expect(await query, isEmpty);
+    // Still armed: the read must neither wait on the gate nor clear it.
+    expect(gate.isActive, isTrue);
   });
 
   test(
