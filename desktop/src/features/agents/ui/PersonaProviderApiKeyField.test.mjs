@@ -41,12 +41,7 @@ function extractAttr(html, attrName) {
 /** Extract ALL values of an attribute from html, in document order. */
 function extractAllAttrs(html, attrName) {
   const re = new RegExp(`${attrName}="([^"]+)"`, "g");
-  const results = [];
-  let m;
-  while ((m = re.exec(html)) !== null) {
-    results.push(m[1]);
-  }
-  return results;
+  return Array.from(html.matchAll(re), (m) => m[1]);
 }
 
 test("PersonaProviderApiKeyField_renders_semantic_label", () => {
