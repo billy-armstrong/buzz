@@ -72,7 +72,7 @@ const RESPOND_TO_OPTIONS: PersonaDropdownOption[] = [
   { label: "Selected people", value: "allowlist" },
 ];
 
-export const INTERNAL_AGENT_ACCESS_DISABLED_REASON =
+export const OWNER_ONLY_ACCESS_DISABLED_REASON =
   "This build disallows changing this setting.";
 
 export function CreateAgentRespondToField({

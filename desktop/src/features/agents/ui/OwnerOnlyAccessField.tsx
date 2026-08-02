@@ -1,10 +1,10 @@
 import type { RespondToMode } from "@/shared/api/types";
 import {
   CreateAgentRespondToField,
-  INTERNAL_AGENT_ACCESS_DISABLED_REASON,
+  OWNER_ONLY_ACCESS_DISABLED_REASON,
 } from "./RespondToField";
 
-export function InternalAgentAccessField({
+export function OwnerOnlyAccessField({
   accessLocked,
   allowlist,
   disabled,
@@ -24,7 +24,7 @@ export function InternalAgentAccessField({
       allowlist={accessLocked ? [] : allowlist}
       disabled={disabled || accessLocked}
       disabledReason={
-        accessLocked ? INTERNAL_AGENT_ACCESS_DISABLED_REASON : undefined
+        accessLocked ? OWNER_ONLY_ACCESS_DISABLED_REASON : undefined
       }
       mode={accessLocked ? "owner-only" : mode}
       onAllowlistChange={onAllowlistChange}

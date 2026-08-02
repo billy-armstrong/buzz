@@ -83,7 +83,7 @@ test.describe("agent definition dialog", () => {
     page,
   }) => {
     await installMockBridge(page, {
-      internalBuild: true,
+      ownerOnlyAccessBuild: true,
       bakedBuildEnv: BAKED_DEFAULTS,
     });
     await page.goto("/");
@@ -110,7 +110,7 @@ test.describe("edit agent dialog", () => {
     page,
   }) => {
     await installMockBridge(page, {
-      internalBuild: true,
+      ownerOnlyAccessBuild: true,
       bakedBuildEnv: BAKED_DEFAULTS,
       managedAgents: [
         {

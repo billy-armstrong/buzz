@@ -4,7 +4,7 @@ import { cn } from "@/shared/lib/cn";
 import { EnvVarsEditor, type EnvVarsValue } from "./EnvVarsEditor";
 import {
   CreateAgentRespondToField,
-  INTERNAL_AGENT_ACCESS_DISABLED_REASON,
+  OWNER_ONLY_ACCESS_DISABLED_REASON,
 } from "./RespondToField";
 import type { PersonaBehaviorDraft } from "./personaBehaviorDraft";
 import { isBuzzAgentRuntime } from "./buzzAgentConfig";
@@ -62,9 +62,7 @@ export function PersonaAdvancedFields({
         allowlist={agentAccessOwnerOnly ? [] : behaviorDraft.respondToAllowlist}
         disabled={disabled || agentAccessOwnerOnly}
         disabledReason={
-          agentAccessOwnerOnly
-            ? INTERNAL_AGENT_ACCESS_DISABLED_REASON
-            : undefined
+          agentAccessOwnerOnly ? OWNER_ONLY_ACCESS_DISABLED_REASON : undefined
         }
         mode={respondToMode}
         onAllowlistChange={(allowlist) =>

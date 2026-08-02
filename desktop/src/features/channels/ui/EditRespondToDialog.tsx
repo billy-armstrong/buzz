@@ -7,7 +7,7 @@ import {
 import { runLocationForBackend } from "@/features/agents/lib/agentAccessWarning";
 import {
   CreateAgentRespondToField,
-  INTERNAL_AGENT_ACCESS_DISABLED_REASON,
+  OWNER_ONLY_ACCESS_DISABLED_REASON,
 } from "@/features/agents/ui/RespondToField";
 import type { ManagedAgent, RespondToMode } from "@/shared/api/types";
 import { Button } from "@/shared/ui/button";
@@ -74,7 +74,7 @@ export function EditRespondToDialog({
           allowlist={accessLocked ? [] : respondToAllowlist}
           disabled={updateMutation.isPending || accessLocked}
           disabledReason={
-            accessLocked ? INTERNAL_AGENT_ACCESS_DISABLED_REASON : undefined
+            accessLocked ? OWNER_ONLY_ACCESS_DISABLED_REASON : undefined
           }
           mode={accessLocked ? "owner-only" : respondTo}
           onAllowlistChange={setRespondToAllowlist}
