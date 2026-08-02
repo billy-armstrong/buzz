@@ -101,9 +101,7 @@ test.describe("agent definition dialog", () => {
     );
     await expect(
       dialog.getByTestId("agent-respond-to-disabled-reason"),
-    ).toHaveText(
-      "This build limits agents to messages from you, so the access level cannot be changed.",
-    );
+    ).toHaveText("This build disallows changing this setting.");
   });
 });
 
@@ -135,9 +133,7 @@ test.describe("edit agent dialog", () => {
     );
     await expect(
       page.getByTestId("agent-respond-to-disabled-reason"),
-    ).toHaveText(
-      "This build limits agents to messages from you, so the access level cannot be changed.",
-    );
+    ).toHaveText("This build disallows changing this setting.");
   });
 
   test("OSS build keeps the managed-agent access control", async ({ page }) => {

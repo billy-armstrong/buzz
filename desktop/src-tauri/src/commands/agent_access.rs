@@ -1,7 +1,7 @@
 /// Return whether this build enforces owner-only managed-agent access.
 #[tauri::command]
 pub fn agent_access_owner_only() -> bool {
-    crate::managed_agents::internal_build()
+    crate::managed_agents::owner_only_access_build()
 }
 
 #[cfg(test)]

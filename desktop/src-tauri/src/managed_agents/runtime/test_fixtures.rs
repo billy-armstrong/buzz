@@ -7,9 +7,13 @@ pub(super) fn expected_owner_only() -> bool {
         Ok(value) => value
             .parse::<bool>()
             .unwrap_or_else(|_| panic!("{EXPECTED_ACCESS_ENV} must be true or false")),
-        Err(std::env::VarError::NotPresent) if !crate::managed_agents::internal_build() => false,
+        Err(std::env::VarError::NotPresent)
+            if !crate::managed_agents::owner_only_access_build() =>
+        {
+            false
+        }
         Err(std::env::VarError::NotPresent) => {
-            panic!("{EXPECTED_ACCESS_ENV} must be set for internal-build tests")
+            panic!("{EXPECTED_ACCESS_ENV} must be set for owner-only-access-build tests")
         }
         Err(std::env::VarError::NotUnicode(_)) => {
             panic!("{EXPECTED_ACCESS_ENV} must be valid UTF-8")

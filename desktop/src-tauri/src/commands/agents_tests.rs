@@ -528,10 +528,14 @@ fn current_build_deploy_payload_forwards_compiled_policy() {
         Ok(value) => value
             .parse::<bool>()
             .expect("BUZZ_TEST_EXPECTED_AGENT_ACCESS_OWNER_ONLY must be true or false"),
-        Err(std::env::VarError::NotPresent) if !crate::managed_agents::internal_build() => false,
+        Err(std::env::VarError::NotPresent)
+            if !crate::managed_agents::owner_only_access_build() =>
+        {
+            false
+        }
         Err(std::env::VarError::NotPresent) => {
             panic!(
-                "BUZZ_TEST_EXPECTED_AGENT_ACCESS_OWNER_ONLY must be set for internal-build tests"
+                "BUZZ_TEST_EXPECTED_AGENT_ACCESS_OWNER_ONLY must be set for owner-only-access-build tests"
             )
         }
         Err(std::env::VarError::NotUnicode(_)) => {

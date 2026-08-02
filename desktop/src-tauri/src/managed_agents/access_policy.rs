@@ -4,26 +4,27 @@ use super::{validate_respond_to_allowlist, ManagedAgentRecord, RespondTo};
 
 pub(crate) type RespondToEnv = (Vec<(&'static str, String)>, Vec<&'static str>);
 
-/// Internal packaging sets `BUZZ_BUILD_INTERNAL`; OSS/custom builds do not.
-pub(crate) fn internal_build() -> bool {
-    option_env!("BUZZ_DESKTOP_BUILD_INTERNAL").is_some()
+/// Release packaging sets `BUZZ_BUILD_AGENT_ACCESS_OWNER_ONLY`; OSS/custom
+/// builds do not.
+pub(crate) fn owner_only_access_build() -> bool {
+    option_env!("BUZZ_DESKTOP_BUILD_AGENT_ACCESS_OWNER_ONLY").is_some()
 }
 
 pub(crate) fn owner_only() -> bool {
-    owner_only_with_policy(internal_build())
+    owner_only_with_policy(owner_only_access_build())
 }
 
-pub(crate) fn owner_only_with_policy(internal: bool) -> bool {
-    internal
+pub(crate) fn owner_only_with_policy(owner_only_access: bool) -> bool {
+    owner_only_access
 }
 
 /// Project effective access at a behavioral boundary without changing the
 /// stored or relay-advertised access fields.
 pub(crate) fn projected_access_with_policy(
     record: &ManagedAgentRecord,
-    internal: bool,
+    owner_only_access: bool,
 ) -> (RespondTo, Vec<String>) {
-    if owner_only_with_policy(internal) {
+    if owner_only_with_policy(owner_only_access) {
         (RespondTo::OwnerOnly, Vec::new())
     } else {
         (record.respond_to, record.respond_to_allowlist.clone())
@@ -31,7 +32,7 @@ pub(crate) fn projected_access_with_policy(
 }
 
 /// Build the inbound-author access environment for a launched agent. The
-/// explicit policy input keeps internal-build enforcement testable without
+/// explicit policy input keeps owner-only access enforcement testable without
 /// weakening the production caller's compile-time decision.
 pub(crate) fn build_respond_to_env_with_policy(
     record: &ManagedAgentRecord,
@@ -95,21 +96,21 @@ mod tests {
     }
 
     #[test]
-    fn internal_policy_rejects_malformed_stored_allowlist_before_clamping() {
+    fn owner_only_access_policy_rejects_malformed_stored_allowlist_before_clamping() {
         let mut record = record(BackendKind::Local);
         record.respond_to_allowlist = vec!["malformed stale allowlist".into()];
 
         let error = build_respond_to_env_with_policy(&record, Some("owner"), true)
-            .expect_err("internal policy accepted a malformed stored allowlist");
+            .expect_err("owner-only access policy accepted a malformed stored allowlist");
 
         assert!(
             error.contains("invalid pubkey in respond-to allowlist"),
-            "internal policy returned the wrong malformed-allowlist error: {error}",
+            "owner-only access policy returned the wrong malformed-allowlist error: {error}",
         );
     }
 
     #[test]
-    fn internal_enforcement_clamps_local_and_provider() {
+    fn owner_only_access_enforcement_clamps_local_and_provider() {
         for (label, backend) in [
             ("local", BackendKind::Local),
             (
@@ -127,25 +128,25 @@ mod tests {
             assert_eq!(
                 gate_set.get("BUZZ_ACP_RESPOND_TO").map(String::as_str),
                 Some("owner-only"),
-                "internal runtime env did not clamp {label} agent",
+                "owner-only runtime env did not clamp {label} agent",
             );
             assert_eq!(
                 gate_set
                     .get("BUZZ_ACP_ALLOWED_RESPOND_TO")
                     .map(String::as_str),
                 Some("owner-only"),
-                "internal runtime env omitted the {label} agent guard",
+                "owner-only runtime env omitted the {label} agent guard",
             );
 
             let (respond_to, allowlist) = projected_access_with_policy(&record, true);
             assert_eq!(
                 respond_to,
                 RespondTo::OwnerOnly,
-                "internal provider payload did not clamp {label} agent",
+                "owner-only provider payload did not clamp {label} agent",
             );
             assert!(
                 allowlist.is_empty(),
-                "internal provider payload retained {label} agent allowlist",
+                "owner-only provider payload retained {label} agent allowlist",
             );
         }
     }
