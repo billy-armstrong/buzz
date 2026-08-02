@@ -1045,6 +1045,11 @@ mod tests {
         assert!(deletion.contains("'active', 'quiescing', 'fenced', 'tombstone'"));
         assert!(deletion.contains("_operator_global_tables"));
         assert!(deletion.contains("'submitted', 'inventoried', 'approved', 'fenced', 'drained'"));
+
+        assert!(deletion.contains("UNIQUE (id, community_id, inventory_digest)"));
+        assert!(deletion.contains("FOREIGN KEY (request_id, community_id, inventory_digest)"));
+        assert!(deletion.contains("prevent_community_deletion_request_retargeting"));
+        assert!(deletion.contains("prevent_community_deletion_approval_removal"));
     }
 
     #[test]
