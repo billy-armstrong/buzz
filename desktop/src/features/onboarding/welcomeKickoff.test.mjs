@@ -199,7 +199,7 @@ test("running teammates restart when their allowlist does not include the lead",
   );
 });
 
-test("internal running local and provider teammates do not restart for enforced owner-only access", () => {
+test("owner-only-access policy does not restart running local and provider teammates", () => {
   for (const backend of [
     { type: "local" },
     { type: "provider", id: "remote", config: {} },
@@ -222,7 +222,7 @@ test("internal running local and provider teammates do not restart for enforced 
   }
 });
 
-test("internal running teammates still restart for runtime changes", () => {
+test("owner-only-access policy still restarts running teammates for runtime changes", () => {
   assert.equal(
     welcomeTeammateNeedsRestart(
       {

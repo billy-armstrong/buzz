@@ -185,10 +185,10 @@ pub(super) fn deploy_payload_json(
     effective_prompt: Option<String>,
     merged_env: BTreeMap<String, String>,
     launch: serde_json::Value,
-    internal: bool,
+    owner_only_access: bool,
 ) -> serde_json::Value {
     let (respond_to, respond_to_allowlist) =
-        crate::managed_agents::projected_access_with_policy(record, internal);
+        crate::managed_agents::projected_access_with_policy(record, owner_only_access);
     serde_json::json!({
         "name": &record.name,
         "relay_url": relay_url,

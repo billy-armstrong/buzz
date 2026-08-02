@@ -411,7 +411,10 @@ fn legacy_avatar_empty_when_nothing_resolves() {
 
 // ── Provider deploy payload completeness ─────────────────────────────────────
 
-fn deploy_payload_for_policy(record: &ManagedAgentRecord, internal: bool) -> serde_json::Value {
+fn deploy_payload_for_policy(
+    record: &ManagedAgentRecord,
+    owner_only_access: bool,
+) -> serde_json::Value {
     deploy_payload_json(
         record,
         "wss://relay.example".to_string(),
@@ -422,7 +425,7 @@ fn deploy_payload_for_policy(record: &ManagedAgentRecord, internal: bool) -> ser
         // Access projection is the subject here; the launch block is exercised
         // by the shared provider fixture test below.
         serde_json::Value::Null,
-        internal,
+        owner_only_access,
     )
 }
 
@@ -583,7 +586,7 @@ fn current_build_deploy_payload_forwards_compiled_policy() {
 }
 
 #[test]
-fn internal_deploy_payload_clamps_stale_access() {
+fn owner_only_access_deploy_payload_clamps_stale_access() {
     use crate::managed_agents::{BackendKind, RespondTo};
 
     let mut record = bare_agent_record(None, None, None);
@@ -598,11 +601,11 @@ fn internal_deploy_payload_clamps_stale_access() {
 
     assert_eq!(
         payload["respond_to"], "owner-only",
-        "internal deploy payload widened stale access"
+        "owner-only-access deploy payload widened stale access"
     );
     assert_eq!(
         payload["respond_to_allowlist"],
         serde_json::json!([]),
-        "internal deploy payload retained a stale allowlist"
+        "owner-only-access deploy payload retained a stale allowlist"
     );
 }

@@ -193,7 +193,7 @@ fn build_env_anyone_omits_allowlist_var() {
 }
 
 #[test]
-fn internal_policy_overrides_stale_anyone_record_at_runtime() {
+fn owner_only_access_policy_overrides_stale_anyone_record_at_runtime() {
     let rec = fixture(RespondTo::Anyone, vec!["a".repeat(64)], Some("tag".into()));
     let (set, remove) = build_respond_to_env_with_policy(&rec, Some("owner"), true).unwrap();
     let set_map: std::collections::HashMap<_, _> = set.into_iter().collect();
@@ -201,14 +201,14 @@ fn internal_policy_overrides_stale_anyone_record_at_runtime() {
     assert_eq!(
         set_map.get("BUZZ_ACP_RESPOND_TO").map(String::as_str),
         Some("owner-only"),
-        "internal runtime env widened stale access",
+        "owner-only-access runtime env widened stale access",
     );
     assert_eq!(
         set_map
             .get("BUZZ_ACP_ALLOWED_RESPOND_TO")
             .map(String::as_str),
         Some("owner-only"),
-        "internal runtime env omitted the owner-only guard",
+        "owner-only-access runtime env omitted the owner-only guard",
     );
     assert!(!set_map.contains_key("BUZZ_ACP_RESPOND_TO_ALLOWLIST"));
     assert!(remove.contains(&"BUZZ_ACP_RESPOND_TO_ALLOWLIST"));

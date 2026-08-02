@@ -381,7 +381,7 @@ test("starter matching prefers running, then deployed instances", () => {
   );
 });
 
-test("internal local Welcome teammates accept enforced owner-only access", () => {
+test("owner-only-access policy accepts local Welcome teammates", () => {
   const teammate = makeAgent({
     respondTo: "owner-only",
     respondToAllowlist: [],
@@ -390,7 +390,7 @@ test("internal local Welcome teammates accept enforced owner-only access", () =>
   assert.equal(welcomeTeammateHasExpectedAccess(teammate, PUB_B, false), false);
 });
 
-test("internal provider Welcome teammates accept enforced owner-only access", () => {
+test("owner-only-access policy accepts provider Welcome teammates", () => {
   const teammate = makeAgent({
     backend: { type: "provider", id: "remote", config: {} },
     respondTo: "owner-only",

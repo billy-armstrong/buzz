@@ -79,7 +79,7 @@ async function pickDropdownOption(
 }
 
 test.describe("agent definition dialog", () => {
-  test("internal build shows disabled agent access with an explanation", async ({
+  test("owner-only-access build shows disabled agent access with an explanation", async ({
     page,
   }) => {
     await installMockBridge(page, {
@@ -106,7 +106,7 @@ test.describe("agent definition dialog", () => {
 });
 
 test.describe("edit agent dialog", () => {
-  test("internal build shows a disabled owner-only access control with an explanation", async ({
+  test("owner-only-access build shows a disabled owner-only access control with an explanation", async ({
     page,
   }) => {
     await installMockBridge(page, {
