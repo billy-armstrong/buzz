@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,8 @@ import 'package:hooks_riverpod/misc.dart';
 import 'package:lucide_icons_flutter/lucide_icons.dart';
 import 'package:buzz/features/channels/channel.dart';
 import 'package:buzz/features/channels/channel_management_provider.dart';
+import 'package:buzz/features/channels/channel_sections/channel_sections_provider.dart';
+import 'package:buzz/features/channels/channel_sections/channel_sections_storage.dart';
 import 'package:buzz/features/channels/channels_page.dart';
 import 'package:buzz/features/channels/channels_provider.dart';
 import 'package:buzz/features/channels/read_state/read_state_provider.dart';
@@ -16,8 +19,10 @@ import 'package:buzz/features/profile/profile_provider.dart';
 import 'package:buzz/features/profile/user_profile.dart';
 import 'package:buzz/shared/auth/auth.dart';
 import 'package:buzz/shared/community/community_icon_provider.dart';
+import 'package:buzz/shared/relay/relay.dart';
 import 'package:buzz/shared/theme/theme.dart';
 import 'package:buzz/shared/widgets/avatar_image.dart';
+import 'package:buzz/shared/widgets/skeleton.dart';
 
 void main() {
   Widget buildTestable({
@@ -25,6 +30,7 @@ void main() {
     bool previewDirectory = false,
     double keyboardInset = 0,
     bool disableAnimations = false,
+    double bottomPadding = 0,
     Map<String, String?> communityIcons = const {},
     ValueChanged<String>? onCommunityIconLoad,
     TextScaler textScaler = TextScaler.noScaling,
@@ -49,6 +55,7 @@ void main() {
           data: MediaQuery.of(context).copyWith(
             disableAnimations: disableAnimations,
             textScaler: textScaler,
+            padding: EdgeInsets.only(bottom: bottomPadding),
             viewInsets: EdgeInsets.only(bottom: keyboardInset),
           ),
           child: child!,
@@ -128,6 +135,204 @@ void main() {
     expect(find.text('DMs'), findsOneWidget);
     expect(find.text('Community'), findsOneWidget);
     expect(find.byTooltip('Create or start conversation'), findsOneWidget);
+
+    for (final label in ['general', 'Alice']) {
+      final text = tester.widget<Text>(find.text(label));
+      expect(text.style?.fontSize, contentListTitleTextStyle.fontSize);
+      expect(text.style?.height, contentListTitleTextStyle.height);
+    }
+    final sectionTitle = tester.widget<Text>(find.text('Channels'));
+    expect(sectionTitle.style?.fontSize, contentListTitleTextStyle.fontSize);
+    expect(sectionTitle.style?.fontWeight, FontWeight.w600);
+  });
+
+  testWidgets('keeps the last channel above the floating tab bar', (
+    tester,
+  ) async {
+    const footerClearance = 102.0;
+    await tester.pumpWidget(
+      buildTestable(
+        bottomPadding: footerClearance,
+        overrides: [
+          channelsProvider.overrideWith(() => _FakeNotifier(testChannels)),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final padding = tester.widget<SliverPadding>(
+      find.descendant(
+        of: find.byType(CustomScrollView),
+        matching: find.byType(SliverPadding),
+      ),
+    );
+    expect((padding.padding as EdgeInsets).bottom, footerClearance);
+  });
+
+  testWidgets('truncates long custom section names beside the menu', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    const sectionName = 'A deliberately long custom section name for testing';
+    await tester.pumpWidget(
+      buildTestable(
+        overrides: [
+          channelsProvider.overrideWith(() => _FakeNotifier(testChannels)),
+          channelSectionsProvider.overrideWith(
+            () => _FakeChannelSectionsNotifier(
+              const ChannelSectionStore(
+                sections: [
+                  ChannelSection(id: 'section-1', name: sectionName, order: 0),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final label = tester.widget<Text>(find.text(sectionName));
+    expect(label.maxLines, 1);
+    expect(label.overflow, TextOverflow.ellipsis);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('aligns the top, section, row, and skeleton label columns', (
+    tester,
+  ) async {
+    final relaySession = _ReconnectingRelaySession();
+    await tester.pumpWidget(
+      buildTestable(
+        overrides: [
+          channelsProvider.overrideWith(() => _FakeNotifier(testChannels)),
+          relaySessionProvider.overrideWith(() => relaySession),
+        ],
+      ),
+    );
+    relaySession.connect();
+    await tester.pumpAndSettle();
+
+    final topLabelX = tester.getTopLeft(find.text('Community')).dx;
+    final sectionLabelX = tester.getTopLeft(find.text('Channels')).dx;
+    final rowLabelX = tester.getTopLeft(find.text('general')).dx;
+    expect(topLabelX, sectionLabelX);
+    expect(sectionLabelX, rowLabelX);
+
+    relaySession.setReconnecting();
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
+    final skeletonSectionLabelX = tester
+        .getTopLeft(
+          find.byKey(const Key('channels-skeleton-section-label')).first,
+        )
+        .dx;
+    final skeletonRowLabelX = tester
+        .getTopLeft(
+          find.byKey(const Key('channels-skeleton-row-label-0')).first,
+        )
+        .dx;
+    expect(skeletonSectionLabelX, skeletonRowLabelX);
+    expect(skeletonSectionLabelX, sectionLabelX);
+  });
+
+  testWidgets('reveals channel content from same-slot reconnect skeletons', (
+    tester,
+  ) async {
+    final relaySession = _ReconnectingRelaySession();
+    await tester.pumpWidget(
+      buildTestable(
+        overrides: [
+          channelsProvider.overrideWith(() => _FakeNotifier(testChannels)),
+          relaySessionProvider.overrideWith(() => relaySession),
+        ],
+      ),
+    );
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pump();
+
+    final skeleton = find.byKey(const Key('channels-connection-skeleton'));
+    expect(skeleton, findsOneWidget);
+    expect(
+      find.descendant(of: skeleton, matching: find.byType(SkeletonBar)),
+      findsWidgets,
+    );
+    expect(
+      find.descendant(
+        of: skeleton,
+        matching: find.byType(CircularProgressIndicator),
+      ),
+      findsNothing,
+    );
+    expect(
+      tester
+          .widget<Opacity>(find.byKey(const Key('skeleton-reveal-placeholder')))
+          .opacity,
+      1,
+    );
+    expect(
+      tester
+          .widget<Opacity>(find.byKey(const Key('skeleton-reveal-content')))
+          .opacity,
+      0,
+    );
+
+    relaySession.connect();
+    await tester.pump();
+    await tester.pump();
+    expect(
+      tester.widget<SkeletonReveal>(find.byType(SkeletonReveal)).loading,
+      isFalse,
+    );
+    await tester.pump(const Duration(milliseconds: 200));
+
+    expect(
+      tester
+          .widget<Opacity>(find.byKey(const Key('skeleton-reveal-placeholder')))
+          .opacity,
+      closeTo(0.5, 0.01),
+    );
+    expect(
+      tester
+          .widget<Opacity>(find.byKey(const Key('skeleton-reveal-content')))
+          .opacity,
+      closeTo(0.5, 0.01),
+    );
+
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('general'), findsOneWidget);
+  });
+
+  testWidgets('announces neutral loading outside connection transitions', (
+    tester,
+  ) async {
+    final relaySession = _ReconnectingRelaySession(
+      initialStatus: SessionStatus.connected,
+    );
+    await tester.pumpWidget(
+      buildTestable(
+        overrides: [
+          channelsProvider.overrideWith(() => _LoadingNotifier()),
+          relaySessionProvider.overrideWith(() => relaySession),
+        ],
+      ),
+    );
+    await tester.pump();
+
+    expect(
+      tester
+          .widget<Semantics>(
+            find.byKey(const Key('channels-connection-skeleton')),
+          )
+          .properties
+          .label,
+      'Loading',
+    );
   });
 
   testWidgets('opens the settings page supplied by the app layer', (
@@ -1237,6 +1442,16 @@ class _FakeNotifier extends ChannelsNotifier {
   get observedUnreadEventsByChannel => _observedEventsByChannel;
 }
 
+class _FakeChannelSectionsNotifier extends ChannelSectionsNotifier {
+  _FakeChannelSectionsNotifier(this._store);
+
+  final ChannelSectionStore _store;
+
+  @override
+  ChannelSectionsState build() =>
+      ChannelSectionsState(isReady: true, store: _store, version: 1);
+}
+
 class _FakeCommunityListNotifier extends CommunityListNotifier {
   _FakeCommunityListNotifier(this._communities);
 
@@ -1259,6 +1474,41 @@ class _FakeCommunityListNotifier extends CommunityListNotifier {
 class _ErrorNotifier extends ChannelsNotifier {
   @override
   Future<List<Channel>> build() => Future.error('Connection refused');
+}
+
+class _LoadingNotifier extends ChannelsNotifier {
+  @override
+  Future<List<Channel>> build() => Completer<List<Channel>>().future;
+}
+
+class _ReconnectingRelaySession extends RelaySessionNotifier {
+  final SessionStatus initialStatus;
+
+  _ReconnectingRelaySession({this.initialStatus = SessionStatus.reconnecting});
+
+  @override
+  SessionState build() => SessionState(status: initialStatus);
+
+  @override
+  Future<List<NostrEvent>> fetchHistory(
+    NostrFilter filter, {
+    Duration timeout = const Duration(seconds: 8),
+  }) async => [];
+
+  @override
+  Future<void Function()> subscribe(
+    NostrFilter filter,
+    void Function(NostrEvent) onEvent, {
+    void Function(String message)? onClosed,
+  }) async => () {};
+
+  void connect() {
+    state = const SessionState(status: SessionStatus.connected);
+  }
+
+  void setReconnecting() {
+    state = const SessionState(status: SessionStatus.reconnecting);
+  }
 }
 
 class _FakeProfileNotifier extends ProfileNotifier {

@@ -32,6 +32,7 @@ import { useSettleGatedPrependMessages } from "./useSettleGatedPrependMessages";
 
 export type MessageTimelineHandle = {
   scrollToBottomOnNextUpdate: () => void;
+  settleAtBottom: () => boolean;
 };
 
 type MessageTimelineProps = {
@@ -83,6 +84,7 @@ type MessageTimelineProps = {
   onMarkUnread?: (message: TimelineMessage) => void;
   onMarkRead?: (message: TimelineMessage) => void;
   onReply?: (message: TimelineMessage) => void;
+  onOpenThread?: (message: TimelineMessage) => void;
   isSendingVideoReviewComment?: boolean;
   onSendVideoReviewComment?: (
     message: TimelineMessage,
@@ -177,6 +179,7 @@ const MessageTimelineBase = React.forwardRef<
     onMarkUnread,
     onMarkRead,
     onReply,
+    onOpenThread,
     channelName,
     channelType,
     isSendingVideoReviewComment = false,
@@ -433,8 +436,13 @@ const MessageTimelineBase = React.forwardRef<
     ref,
     () => ({
       scrollToBottomOnNextUpdate: prepareForOwnMessage,
+      settleAtBottom: () => {
+        if (!timelineVirtualizerApi) return false;
+        scrollToBottom("auto");
+        return true;
+      },
     }),
-    [prepareForOwnMessage],
+    [prepareForOwnMessage, scrollToBottom, timelineVirtualizerApi],
   );
 
   // Jump-to-message is purely DOM-based now: all loaded rows are mounted, so
@@ -629,6 +637,7 @@ const MessageTimelineBase = React.forwardRef<
       onMarkUnread={onMarkUnread}
       onMarkRead={onMarkRead}
       onReply={onReply}
+      onOpenThread={onOpenThread}
       isSendingVideoReviewComment={isSendingVideoReviewComment}
       onSendVideoReviewComment={onSendVideoReviewComment}
       onStartReached={loadOlderViaVirtualizer}
