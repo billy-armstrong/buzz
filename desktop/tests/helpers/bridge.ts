@@ -524,6 +524,23 @@ type MockBridgeOptions = {
    * returning a catalog. Exercises the discovery-failure UI path.
    */
   discoverAgentModelsError?: string;
+  /**
+   * Providers returned by `discover_backend_providers`. Defaults to `[]`
+   * (the "Run on" section stays hidden). Setting this renders the remote
+   * backend selector in the create-agent dialog.
+   */
+  backendProviders?: Array<{ id: string; binaryPath: string }>;
+  /**
+   * Result returned by `probe_backend_provider`. Defaults to
+   * `{ ok: false, error: "mock: no providers available" }`.
+   */
+  backendProviderProbeResult?: Record<string, unknown>;
+  /**
+   * Delay (ms) applied to `probe_backend_provider` so a spec can type into
+   * provider config fields while the probe is still in flight (pins the
+   * latest-state merge on probe resolution).
+   */
+  backendProviderProbeDelayMs?: number;
 };
 
 type BridgeOptions = {
