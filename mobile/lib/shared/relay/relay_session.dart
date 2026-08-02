@@ -53,6 +53,13 @@ class _LiveSubscription {
   });
 }
 
+class _ClosedRetry {
+  final _LiveSubscription subscription;
+  final int generation;
+
+  _ClosedRetry({required this.subscription, required this.generation});
+}
+
 class _PendingEvent {
   final Completer<NostrEvent> completer;
   final Timer timeout;
@@ -108,6 +115,7 @@ class RelaySessionNotifier extends Notifier<SessionState> {
   RelaySocket? _socket;
   final Map<String, _HistorySubscription> _historySubscriptions = {};
   final Map<String, _LiveSubscription> _liveSubscriptions = {};
+  final Map<String, _ClosedRetry> _pendingClosedRetries = {};
   final Map<String, _PendingEvent> _pendingEvents = {};
   final List<_BufferedEvent> _eventBuffer = [];
   final Set<String> _recentDeliveryKeys = {};
@@ -122,6 +130,7 @@ class RelaySessionNotifier extends Notifier<SessionState> {
   int _connectionGeneration = 0;
   final Map<Object, String> _visibleChannelsByOwner = {};
   bool _socketConnected = false;
+  bool _closedRetryReplayScheduled = false;
 
   @override
   SessionState build() {
@@ -489,6 +498,28 @@ class RelaySessionNotifier extends Notifier<SessionState> {
       });
     }
 
+    await _sendReplayBatches(entries, generation);
+  }
+
+  Future<void> _replayPendingClosedRetries(int generation) async {
+    if (!_isActiveConnection(generation)) return;
+    final entries = _pendingClosedRetries.entries
+        .where((entry) => entry.value.generation == generation)
+        .map(
+          (entry) => MapEntry<String, _LiveSubscription>(
+            entry.key,
+            entry.value.subscription,
+          ),
+        )
+        .toList();
+    await _sendReplayBatches(entries, generation, pendingClosedRetries: true);
+  }
+
+  Future<void> _sendReplayBatches(
+    List<MapEntry<String, _LiveSubscription>> entries,
+    int generation, {
+    bool pendingClosedRetries = false,
+  }) async {
     for (var i = 0; i < entries.length; i += _replayBatchSize) {
       if (_rateLimitGate.isActive) await _rateLimitGate.wait();
       if (!_isActiveConnection(generation)) return;
@@ -498,6 +529,14 @@ class RelaySessionNotifier extends Notifier<SessionState> {
       );
       for (final entry in batch) {
         if (_liveSubscriptions[entry.key] != entry.value) continue;
+        if (pendingClosedRetries) {
+          final pendingRetry = _pendingClosedRetries[entry.key];
+          if (pendingRetry?.subscription != entry.value ||
+              pendingRetry?.generation != generation) {
+            continue;
+          }
+          _pendingClosedRetries.remove(entry.key);
+        }
         _sendReq(entry.key, _replayFilter(entry.value));
       }
       if (i + _replayBatchSize < entries.length) {
@@ -653,17 +692,48 @@ class RelaySessionNotifier extends Notifier<SessionState> {
     }
 
     liveSub.closedRetryAttempt = attempt + 1;
+    final retryGeneration = _connectionGeneration;
     liveSub.closedRetryTimer = _retryTimerFactory(
       Duration(milliseconds: delayMs),
       () async {
         liveSub.closedRetryTimer = null;
-        if (_disposed || _liveSubscriptions[subId] != liveSub) return;
+        if (!_isActiveConnection(retryGeneration) ||
+            _liveSubscriptions[subId] != liveSub) {
+          return;
+        }
         if (_rateLimitGate.isActive) await _rateLimitGate.wait();
-        if (_disposed || _liveSubscriptions[subId] != liveSub) return;
-        if (!_socketConnected) return;
-        _sendReq(subId, _replayFilter(liveSub));
+        if (!_isActiveConnection(retryGeneration) ||
+            _liveSubscriptions[subId] != liveSub ||
+            !_socketConnected) {
+          return;
+        }
+        _pendingClosedRetries[subId] = _ClosedRetry(
+          subscription: liveSub,
+          generation: retryGeneration,
+        );
+        _scheduleClosedRetryReplay(retryGeneration);
       },
     );
+  }
+
+  void _scheduleClosedRetryReplay(int generation) {
+    if (_closedRetryReplayScheduled) return;
+    _closedRetryReplayScheduled = true;
+    scheduleMicrotask(() async {
+      try {
+        await _replayPendingClosedRetries(generation);
+      } finally {
+        _closedRetryReplayScheduled = false;
+        _pendingClosedRetries.removeWhere(
+          (_, retry) => retry.generation != _connectionGeneration,
+        );
+        if (_pendingClosedRetries.values.any(
+          (retry) => retry.generation == _connectionGeneration,
+        )) {
+          _scheduleClosedRetryReplay(_connectionGeneration);
+        }
+      }
+    });
   }
 
   void _handleOk(List<dynamic> data) {
@@ -768,6 +838,7 @@ class RelaySessionNotifier extends Notifier<SessionState> {
   void _removeLiveSubscription(String subId, _LiveSubscription subscription) {
     if (_liveSubscriptions[subId] != subscription) return;
     _liveSubscriptions.remove(subId);
+    _pendingClosedRetries.remove(subId);
     subscription.closedRetryTimer?.cancel();
     subscription.closedRetryTimer = null;
     _recentDeliveryKeys.removeWhere((key) => key.startsWith('$subId:'));
@@ -780,6 +851,7 @@ class RelaySessionNotifier extends Notifier<SessionState> {
   }
 
   void _cancelAllClosedRetries() {
+    _pendingClosedRetries.clear();
     for (final subscription in _liveSubscriptions.values) {
       subscription.closedRetryTimer?.cancel();
       subscription.closedRetryTimer = null;
@@ -787,6 +859,7 @@ class RelaySessionNotifier extends Notifier<SessionState> {
   }
 
   void _resetAllClosedRetries() {
+    _pendingClosedRetries.clear();
     for (final subscription in _liveSubscriptions.values) {
       _resetClosedRetry(subscription);
     }

@@ -610,6 +610,126 @@ void main() {
     unsubscribe();
   });
 
+  test(
+    'rate-limited CLOSED retry does not survive a superseded connection',
+    () async {
+      final retryTimers = <_ManualTimer>[];
+      final gateTimers = <_ManualTimer>[];
+      final gate = RelayRateLimitGate(
+        now: () => DateTime(2026),
+        timerFactory: (duration, callback) {
+          final timer = _ManualTimer(duration, callback);
+          gateTimers.add(timer);
+          return timer;
+        },
+      );
+      final socket = _RecordingRelaySocket();
+      final session = RelaySessionNotifier(
+        rateLimitGate: gate,
+        retryTimerFactory: (duration, callback) {
+          final timer = _ManualTimer(duration, callback);
+          retryTimers.add(timer);
+          return timer;
+        },
+      );
+      session.debugAttachSocketForTest(socket);
+      final subscribe = session.subscribe(_channelFilter, (_) {});
+      session.debugHandleMessage(['EOSE', 'l-1']);
+      final unsubscribe = await subscribe;
+      socket.messages.clear();
+
+      session.debugHandleMessage([
+        'CLOSED',
+        'l-1',
+        'rate-limited: quota exceeded; retry in 4s',
+      ]);
+      retryTimers.single.fire();
+      await Future<void>.delayed(Duration.zero);
+      expect(_reqs(socket), isEmpty);
+
+      session.debugSupersedeConnection();
+      final replacementReplay = session.debugReplayLiveSubscriptions();
+      await Future<void>.delayed(Duration.zero);
+      gateTimers.single.fire();
+      await replacementReplay;
+      await Future<void>.delayed(Duration.zero);
+
+      expect(_reqs(socket).where((req) => req[1] == 'l-1'), hasLength(1));
+      unsubscribe();
+    },
+  );
+
+  test('simultaneous rate-limited CLOSED retries are replay-paced', () async {
+    final retryTimers = <_ManualTimer>[];
+    final gateTimers = <_ManualTimer>[];
+    final replayDelays = <Duration>[];
+    final replayDelayCompleters = <Completer<void>>[];
+    final gate = RelayRateLimitGate(
+      now: () => DateTime(2026),
+      timerFactory: (duration, callback) {
+        final timer = _ManualTimer(duration, callback);
+        gateTimers.add(timer);
+        return timer;
+      },
+    );
+    final socket = _RecordingRelaySocket();
+    final session = RelaySessionNotifier(
+      rateLimitGate: gate,
+      retryTimerFactory: (duration, callback) {
+        final timer = _ManualTimer(duration, callback);
+        retryTimers.add(timer);
+        return timer;
+      },
+      replayDelay: (duration) {
+        replayDelays.add(duration);
+        final completer = Completer<void>();
+        replayDelayCompleters.add(completer);
+        return completer.future;
+      },
+    );
+    session.debugAttachSocketForTest(socket);
+
+    for (var i = 0; i < 30; i++) {
+      final subscribe = session.subscribe(
+        _filterForChannel('channel-$i'),
+        (_) {},
+      );
+      session.debugHandleMessage(['EOSE', 'l-${i + 1}']);
+      await subscribe;
+    }
+    socket.messages.clear();
+
+    for (var i = 0; i < 30; i++) {
+      session.debugHandleMessage([
+        'CLOSED',
+        'l-${i + 1}',
+        'rate-limited: quota exceeded; retry in 4s',
+      ]);
+    }
+    for (final timer in retryTimers) {
+      timer.fire();
+    }
+    await Future<void>.delayed(Duration.zero);
+    expect(_reqs(socket), isEmpty);
+
+    gateTimers.single.fire();
+    await Future<void>.delayed(Duration.zero);
+    expect(_reqs(socket), hasLength(8));
+    expect(replayDelays, [const Duration(milliseconds: 50)]);
+
+    for (final expectedCount in [16, 24, 30]) {
+      replayDelayCompleters.last.complete();
+      await Future<void>.delayed(Duration.zero);
+      expect(_reqs(socket), hasLength(expectedCount));
+    }
+    expect(replayDelays, [
+      const Duration(milliseconds: 50),
+      const Duration(milliseconds: 50),
+      const Duration(milliseconds: 50),
+    ]);
+    session.debugDispose();
+  });
+
   test('active rate-limit gate does not delay a new live subscribe', () async {
     final gateTimers = <_ManualTimer>[];
     final gate = RelayRateLimitGate(
