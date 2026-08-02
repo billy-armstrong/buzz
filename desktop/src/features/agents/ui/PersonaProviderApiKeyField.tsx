@@ -54,8 +54,9 @@ export function PersonaProviderApiKeyField({
   value: string;
 }) {
   const [showValue, setShowValue] = React.useState(false);
-  const inputId = "persona-provider-api-key";
-  const hintId = envVarName ? "persona-provider-api-key-hint" : undefined;
+  const uid = React.useId();
+  const inputId = `persona-provider-api-key-${uid}`;
+  const hintId = envVarName ? `persona-provider-api-key-hint-${uid}` : undefined;
 
   return (
     <div className="space-y-1.5">
