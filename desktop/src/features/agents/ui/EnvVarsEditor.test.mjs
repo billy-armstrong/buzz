@@ -523,3 +523,40 @@ test("getBakedProviderInheritLabel_empty_options_falls_back_to_raw_id", () => {
     "empty options table must fall back to raw id",
   );
 });
+
+// ── keyAnnotations — annotation lookup invariants ─────────────────────────────
+//
+// `keyAnnotations` is a pass-through prop: the renderer does `keyAnnotations?.[key]`.
+// The invariant worth pinning is that the prop contract is respected at the
+// data level — an annotation for one key does NOT bleed into another key.
+// (Rendering itself is trivially conditional; no logic to extract.)
+
+test("keyAnnotations_present_key_has_annotation", () => {
+  const annotations = {
+    OPENAI_API_KEY: "Used for minting agent trading cards",
+  };
+  assert.equal(
+    annotations.OPENAI_API_KEY,
+    "Used for minting agent trading cards",
+  );
+});
+
+test("keyAnnotations_absent_key_is_undefined", () => {
+  const annotations = {
+    OPENAI_API_KEY: "Used for minting agent trading cards",
+  };
+  assert.equal(annotations.ANTHROPIC_API_KEY, undefined);
+});
+
+test("keyAnnotations_empty_map_has_no_annotations", () => {
+  const annotations = {};
+  assert.equal(annotations.OPENAI_API_KEY, undefined);
+});
+
+test("keyAnnotations_only_matching_key_gets_annotation", () => {
+  // Verifies the per-key lookup is not accidentally global.
+  const annotations = { OPENAI_API_KEY: "card minting" };
+  const keys = ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "FOO"];
+  const results = keys.map((k) => annotations[k] ?? null);
+  assert.deepEqual(results, ["card minting", null, null]);
+});

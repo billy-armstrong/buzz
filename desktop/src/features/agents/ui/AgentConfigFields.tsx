@@ -35,6 +35,7 @@ import {
   CUSTOM_PROVIDER_DROPDOWN_VALUE,
   getPersonaProviderOptions,
   getProviderApiKeyEnvVar,
+  getProviderApiKeyLabel,
   runtimeSupportsLlmProviderSelection,
 } from "@/features/agents/ui/agentConfigOptions";
 import {
@@ -74,7 +75,10 @@ const PROGRESSIVE_FIELDS_TRANSITION = {
   duration: 0.22,
   ease: [0.23, 1, 0.32, 1],
 } as const;
-
+/** Muted contextual hints beneath matching rows in the global env editor. */
+const GLOBAL_ENV_KEY_ANNOTATIONS: Readonly<Record<string, string>> = {
+  OPENAI_API_KEY: "Used for minting agent trading cards",
+};
 type AgentConfigDisclosure =
   | "full"
   | "onboarding-essential"
@@ -747,6 +751,7 @@ export function AgentConfigFields({
         <div className={blockClassName}>
           <PersonaProviderApiKeyField
             disabled={false}
+            envVarName={apiKeyEnvVar}
             inheritedLabel={
               apiKeyFileSatisfied
                 ? "Set in runtime config"
@@ -754,11 +759,7 @@ export function AgentConfigFields({
             }
             isInherited={apiKeyInherited}
             isRequired={!apiKeyInherited && apiKeyValue.length === 0}
-            label={
-              effectiveProvider === "anthropic"
-                ? "Anthropic API Key"
-                : "OpenAI API Key"
-            }
+            label={getProviderApiKeyLabel(effectiveProvider) ?? "API Key"}
             onValueChange={(value) =>
               onConfigChange({
                 ...config,
@@ -912,6 +913,7 @@ export function AgentConfigFields({
                     hiddenKeys={apiKeyEnvVar ? [apiKeyEnvVar] : []}
                     inheritedRows={bakedGenericRows}
                     inheritedRowsLabel="build"
+                    keyAnnotations={GLOBAL_ENV_KEY_ANNOTATIONS}
                     label="Environment variables"
                     onChange={handleEnvVarsChange}
                     requiredKeys={advancedRequiredEnvKeys}
@@ -930,6 +932,7 @@ export function AgentConfigFields({
               hiddenKeys={apiKeyEnvVar ? [apiKeyEnvVar] : []}
               inheritedRows={bakedGenericRows}
               inheritedRowsLabel="build"
+              keyAnnotations={GLOBAL_ENV_KEY_ANNOTATIONS}
               label="Environment variables"
               onChange={handleEnvVarsChange}
               requiredKeys={advancedRequiredEnvKeys}

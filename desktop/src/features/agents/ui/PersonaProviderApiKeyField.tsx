@@ -25,6 +25,7 @@ import {
  */
 export function PersonaProviderApiKeyField({
   disabled,
+  envVarName,
   isInherited,
   inheritedLabel,
   isRequired,
@@ -33,6 +34,12 @@ export function PersonaProviderApiKeyField({
   value,
 }: {
   disabled: boolean;
+  /**
+   * The backing environment variable name, e.g. `OPENAI_COMPAT_API_KEY`.
+   * Rendered as a monospace hint beneath the label so users can distinguish
+   * this field from other keys with similar names (e.g. `OPENAI_API_KEY`).
+   */
+  envVarName?: string;
   /** True when the key is satisfied by an inherited layer. */
   isInherited: boolean;
   /** Human-readable source of the inherited value. */
@@ -53,6 +60,9 @@ export function PersonaProviderApiKeyField({
       <RequiredFieldLabel htmlFor={inputId} isRequired={isRequired}>
         {label}
       </RequiredFieldLabel>
+      {envVarName ? (
+        <p className="text-xs text-muted-foreground font-mono">{envVarName}</p>
+      ) : null}
       <div
         className={cn(
           "flex min-h-11 items-center gap-2 px-3",

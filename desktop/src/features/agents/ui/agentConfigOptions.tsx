@@ -68,6 +68,9 @@ export type PersonaDropdownOption = {
  *   pastes in. Cleared automatically when the user switches away from the
  *   provider. Databricks uses OAuth PKCE (no typed secret), so it has no
  *   secretEnvVar.
+ * `apiKeyLabel`: human-readable label for the credential field in the UI.
+ *   Only present when `secretEnvVar` is set. Used by `getProviderApiKeyLabel`
+ *   so every credential field derives its label from one source of truth.
  *
  * Mirrors the Rust `readiness::buzz_agent_requirements` /
  * `readiness::goose_requirements` logic — keep in sync.
@@ -75,6 +78,8 @@ export type PersonaDropdownOption = {
 export type ProviderCredentialConfig = {
   requiredEnvKeys: readonly string[];
   secretEnvVar?: string;
+  /** Display label for the credential input field, e.g. "Anthropic API Key". */
+  apiKeyLabel?: string;
 };
 
 /**
@@ -87,20 +92,23 @@ const PROVIDER_CREDENTIAL_CONFIG: Partial<
   anthropic: {
     requiredEnvKeys: ["ANTHROPIC_API_KEY"],
     secretEnvVar: "ANTHROPIC_API_KEY",
+    apiKeyLabel: "Anthropic API Key",
   },
   openai: {
     requiredEnvKeys: ["OPENAI_COMPAT_API_KEY"],
     secretEnvVar: "OPENAI_COMPAT_API_KEY",
+    apiKeyLabel: "OpenAI API Key",
   },
   "openai-compat": {
     requiredEnvKeys: ["OPENAI_COMPAT_API_KEY"],
     secretEnvVar: "OPENAI_COMPAT_API_KEY",
+    apiKeyLabel: "OpenAI API Key",
   },
   databricks: {
     // DATABRICKS_TOKEN is NOT required — OAuth PKCE is the normal path.
     requiredEnvKeys: ["DATABRICKS_HOST"],
-    // No secretEnvVar: DATABRICKS_HOST is a URL, not a secret credential, and
-    // is not cleared on provider switch (unlike API keys).
+    // No secretEnvVar / apiKeyLabel: DATABRICKS_HOST is a URL, not a secret
+    // credential, and is not cleared on provider switch (unlike API keys).
   },
   databricks_v2: {
     // DATABRICKS_TOKEN is NOT required — OAuth PKCE is the normal path.
@@ -113,6 +121,7 @@ const PROVIDER_CREDENTIAL_CONFIG: Partial<
   openrouter: {
     requiredEnvKeys: ["OPENROUTER_API_KEY"],
     secretEnvVar: "OPENROUTER_API_KEY",
+    apiKeyLabel: "OpenRouter API Key",
   },
 };
 
@@ -398,6 +407,21 @@ export function getPersonaProviderOptions(
 export function getProviderApiKeyEnvVar(providerId: string): string | null {
   return (
     PROVIDER_CREDENTIAL_CONFIG[providerId.trim().toLowerCase()]?.secretEnvVar ??
+    null
+  );
+}
+
+/**
+ * Returns the display label for the provider's API key field, if any.
+ * Derived from PROVIDER_CREDENTIAL_CONFIG.apiKeyLabel — single source of truth
+ * for all credential field labels so every surface stays in sync.
+ *
+ * Returns null when the provider has no typed-secret credential (e.g.,
+ * Databricks, which uses OAuth PKCE).
+ */
+export function getProviderApiKeyLabel(providerId: string): string | null {
+  return (
+    PROVIDER_CREDENTIAL_CONFIG[providerId.trim().toLowerCase()]?.apiKeyLabel ??
     null
   );
 }
