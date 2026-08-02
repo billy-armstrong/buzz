@@ -32,6 +32,7 @@ import {
 import {
   AUTO_PROVIDER_DROPDOWN_VALUE,
   BLOCK_BUILD_HIDDEN_PROVIDER_IDS,
+  CARD_MINT_KEY_ANNOTATIONS,
   CUSTOM_PROVIDER_DROPDOWN_VALUE,
   getPersonaProviderOptions,
   getProviderApiKeyEnvVar,
@@ -55,6 +56,7 @@ import {
 } from "@/features/agents/ui/buzzAgentModelTuningFields";
 import { SettingsOptionGroup } from "@/features/settings/ui/SettingsOptionGroup";
 import { AdvancedRequiredBadge } from "./AdvancedRequiredBadge";
+import { CardMintKeyCue } from "./CardMintKeyCue";
 import { getGlobalAgentCredentialState } from "./globalAgentCredentialState";
 
 export const EMPTY_GLOBAL_CONFIG: GlobalAgentConfig = {
@@ -75,10 +77,6 @@ const PROGRESSIVE_FIELDS_TRANSITION = {
   duration: 0.22,
   ease: [0.23, 1, 0.32, 1],
 } as const;
-/** Muted contextual hints beneath matching rows in the global env editor. */
-const GLOBAL_ENV_KEY_ANNOTATIONS: Readonly<Record<string, string>> = {
-  OPENAI_API_KEY: "Used for minting agent trading cards",
-};
 type AgentConfigDisclosure =
   | "full"
   | "onboarding-essential"
@@ -89,13 +87,9 @@ type AgentConfigDisclosure =
 // - auto-select a valid model when the provider changes
 // - keep the model select usable during discovery
 // - preserve credential env vars across provider switches (the abandoned
-//   provider's key stays in env_vars — visible/deletable under Advanced —
-//   so flipping back never loses a typed key; spawned agents may therefore
-//   see credentials for providers they don't use)
+//   provider's key stays in env_vars — visible/deletable under Advanced)
 // - require a provider before model/effort are editable (no saveable
-//   invalid state — design principle #4). Note: legacy configs saved with
-//   a model but no provider are cleared by the pre-existing orphan-model
-//   effect on next edit — deliberate data healing, documented in PR.
+//   invalid state — design principle #4)
 const autoSelectModelOnProviderChange = true;
 const disableModelSelectDuringDiscovery = false;
 const preserveCredentialEnvVarsOnProviderChange = true;
@@ -870,6 +864,7 @@ export function AgentConfigFields({
 
       {showAdvancedFields ? (
         <div className={cn(blockClassName, "space-y-3")}>
+          <CardMintKeyCue envVars={config.env_vars} />
           <button
             aria-expanded={advancedOpen}
             className={cn(
@@ -913,7 +908,7 @@ export function AgentConfigFields({
                     hiddenKeys={apiKeyEnvVar ? [apiKeyEnvVar] : []}
                     inheritedRows={bakedGenericRows}
                     inheritedRowsLabel="build"
-                    keyAnnotations={GLOBAL_ENV_KEY_ANNOTATIONS}
+                    keyAnnotations={CARD_MINT_KEY_ANNOTATIONS}
                     label="Environment variables"
                     onChange={handleEnvVarsChange}
                     requiredKeys={advancedRequiredEnvKeys}
@@ -932,7 +927,7 @@ export function AgentConfigFields({
               hiddenKeys={apiKeyEnvVar ? [apiKeyEnvVar] : []}
               inheritedRows={bakedGenericRows}
               inheritedRowsLabel="build"
-              keyAnnotations={GLOBAL_ENV_KEY_ANNOTATIONS}
+              keyAnnotations={CARD_MINT_KEY_ANNOTATIONS}
               label="Environment variables"
               onChange={handleEnvVarsChange}
               requiredKeys={advancedRequiredEnvKeys}

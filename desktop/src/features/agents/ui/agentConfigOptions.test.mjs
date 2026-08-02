@@ -259,13 +259,17 @@ test("getProviderApiKeyLabel_anthropic_returns_anthropic_label", () => {
   assert.equal(getProviderApiKeyLabel("anthropic"), "Anthropic API Key");
 });
 
-test("getProviderApiKeyLabel_openai_returns_openai_label", () => {
-  assert.equal(getProviderApiKeyLabel("openai"), "OpenAI API Key");
+test("getProviderApiKeyLabel_openai_returns_openai_runtime_label", () => {
+  assert.equal(getProviderApiKeyLabel("openai"), "OpenAI Runtime API Key");
 });
 
-test("getProviderApiKeyLabel_openai_compat_returns_openai_label", () => {
-  // openai-compat maps to the same label as openai — both use OPENAI_COMPAT_API_KEY.
-  assert.equal(getProviderApiKeyLabel("openai-compat"), "OpenAI API Key");
+test("getProviderApiKeyLabel_openai_compat_returns_distinct_label", () => {
+  // openai and openai-compat must have distinct labels — both use
+  // OPENAI_COMPAT_API_KEY but carry different semantic identities.
+  assert.equal(
+    getProviderApiKeyLabel("openai-compat"),
+    "OpenAI-compatible Runtime API Key",
+  );
 });
 
 test("getProviderApiKeyLabel_openrouter_returns_openrouter_label", () => {

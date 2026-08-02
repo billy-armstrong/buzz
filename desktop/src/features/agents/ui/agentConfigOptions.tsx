@@ -63,24 +63,30 @@ export type PersonaDropdownOption = {
  *
  * `requiredEnvKeys`: keys that must be present in the agent's effective env for
  *   the provider to work (surfaced as amber required rows in EnvVarsEditor).
- * `secretEnvVar`: the one env key that holds a user-typed secret (API key).
- *   Only set for providers where the credential is a plaintext secret the user
- *   pastes in. Cleared automatically when the user switches away from the
- *   provider. Databricks uses OAuth PKCE (no typed secret), so it has no
- *   secretEnvVar.
- * `apiKeyLabel`: human-readable label for the credential field in the UI.
- *   Only present when `secretEnvVar` is set. Used by `getProviderApiKeyLabel`
- *   so every credential field derives its label from one source of truth.
+ * `secretEnvVar` + `apiKeyLabel`: paired — either both are present or neither
+ *   is. `secretEnvVar` is the env key holding the user-typed secret; clearing
+ *   it when the user switches providers ensures no orphaned credentials remain.
+ *   Databricks uses OAuth PKCE (no typed secret), so it carries neither field.
+ *   `apiKeyLabel` is the human-readable label shown in the credential field;
+ *   derived by `getProviderApiKeyLabel` — single source of truth for all UI
+ *   surfaces so they never drift.
  *
  * Mirrors the Rust `readiness::buzz_agent_requirements` /
  * `readiness::goose_requirements` logic — keep in sync.
  */
-export type ProviderCredentialConfig = {
-  requiredEnvKeys: readonly string[];
-  secretEnvVar?: string;
-  /** Display label for the credential input field, e.g. "Anthropic API Key". */
-  apiKeyLabel?: string;
-};
+export type ProviderCredentialConfig =
+  | {
+      requiredEnvKeys: readonly string[];
+      secretEnvVar?: undefined;
+      apiKeyLabel?: undefined;
+    }
+  | {
+      requiredEnvKeys: readonly string[];
+      /** The env key holding the user-typed API secret. */
+      secretEnvVar: string;
+      /** Display label for the credential input field, e.g. "Anthropic API Key". */
+      apiKeyLabel: string;
+    };
 
 /**
  * Unified provider credential config table.  Single source of truth for both
@@ -97,12 +103,12 @@ const PROVIDER_CREDENTIAL_CONFIG: Partial<
   openai: {
     requiredEnvKeys: ["OPENAI_COMPAT_API_KEY"],
     secretEnvVar: "OPENAI_COMPAT_API_KEY",
-    apiKeyLabel: "OpenAI API Key",
+    apiKeyLabel: "OpenAI Runtime API Key",
   },
   "openai-compat": {
     requiredEnvKeys: ["OPENAI_COMPAT_API_KEY"],
     secretEnvVar: "OPENAI_COMPAT_API_KEY",
-    apiKeyLabel: "OpenAI API Key",
+    apiKeyLabel: "OpenAI-compatible Runtime API Key",
   },
   databricks: {
     // DATABRICKS_TOKEN is NOT required — OAuth PKCE is the normal path.
@@ -425,6 +431,16 @@ export function getProviderApiKeyLabel(providerId: string): string | null {
     null
   );
 }
+
+/**
+ * Muted contextual hint for the `OPENAI_API_KEY` row in env editors.
+ * Pass as `keyAnnotations` to every `EnvVarsEditor` that may surface this key
+ * (Agent Defaults, agent edit dialog, persona definition dialog).  Exported
+ * so the constant is defined once and never duplicated across surfaces.
+ */
+export const CARD_MINT_KEY_ANNOTATIONS: Readonly<Record<string, string>> = {
+  OPENAI_API_KEY: "Used for minting agent trading cards",
+};
 
 export function shouldClearKnownModelForSelectionScope({
   model,

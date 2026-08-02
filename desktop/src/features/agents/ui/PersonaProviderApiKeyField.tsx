@@ -38,6 +38,7 @@ export function PersonaProviderApiKeyField({
    * The backing environment variable name, e.g. `OPENAI_COMPAT_API_KEY`.
    * Rendered as a monospace hint beneath the label so users can distinguish
    * this field from other keys with similar names (e.g. `OPENAI_API_KEY`).
+   * When present, the input's `aria-describedby` points at the hint element.
    */
   envVarName?: string;
   /** True when the key is satisfied by an inherited layer. */
@@ -54,6 +55,7 @@ export function PersonaProviderApiKeyField({
 }) {
   const [showValue, setShowValue] = React.useState(false);
   const inputId = "persona-provider-api-key";
+  const hintId = envVarName ? "persona-provider-api-key-hint" : undefined;
 
   return (
     <div className="space-y-1.5">
@@ -61,7 +63,9 @@ export function PersonaProviderApiKeyField({
         {label}
       </RequiredFieldLabel>
       {envVarName ? (
-        <p className="text-xs text-muted-foreground font-mono">{envVarName}</p>
+        <p className="text-xs text-muted-foreground font-mono" id={hintId}>
+          {envVarName}
+        </p>
       ) : null}
       <div
         className={cn(
@@ -70,6 +74,7 @@ export function PersonaProviderApiKeyField({
         )}
       >
         <Input
+          aria-describedby={hintId}
           autoComplete="off"
           className={cn(
             "h-8 flex-1 px-0 py-0 leading-6",
