@@ -13,7 +13,7 @@ mod reconciler;
 
 pub use domain::{
     ApprovalEventId, Classification, CommitOid, Enrollment, EnrollmentId, ExitOutcome,
-    GithubRepositoryId, ManagedRef, MutationEvidence, ReconcileMode, ReconcileRequest,
+    GithubRepositoryId, ManagedRef, MutationEvidence, NextAction, ReconcileMode, ReconcileRequest,
     ReconcileResult, ReconcileTrigger, ReplayKey, RolloutPhase, RunId, Tips, ValidationError,
 };
 pub use ports::{PortError, PortErrorKind, RunIdGenerator};

@@ -371,6 +371,44 @@ pub enum ExitOutcome {
     Failure,
 }
 
+/// Stable operator action selected by the reconciliation core.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NextAction {
+    /// No operator action is required.
+    None,
+    /// Approve the exact eligible fast-forward.
+    ApproveExactFastForward,
+    /// Approve the newly observed GitHub target before applying it.
+    ApproveNewGithubTarget,
+    /// Repair invalid enrollment or repository configuration.
+    FixConfiguration,
+    /// Inspect a push whose mutation could not be determined.
+    InspectAmbiguousPush,
+    /// Inspect failed session or lock cleanup.
+    InspectCleanupFailure,
+    /// Inspect refs that did not match after a completed push.
+    InspectPostPushRefs,
+    /// Inspect commits present only in the Buzz repository.
+    InspectRelayOnlyCommits,
+    /// Inspect an unexpected trusted-boundary failure.
+    InspectUnexpectedFailure,
+    /// Provide an exact target and approval event for apply mode.
+    ProvideExactTargetAndApproval,
+    /// Repair append-only audit persistence.
+    RepairAuditStore,
+    /// Repair repository credentials or access control.
+    RepairCredentialsOrAcl,
+    /// Retry after the currently active reconciliation finishes.
+    RetryAfterActiveRun,
+    /// Retry after a concurrent repository change.
+    RetryAfterConcurrentChange,
+    /// Retry a transient boundary failure with backoff.
+    RetryWithBackoff,
+    /// Review histories that have diverged.
+    ReviewDivergentHistories,
+}
+
 /// Fixed-schema, secret-free reconciliation evidence.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReconcileResult {
@@ -394,7 +432,7 @@ pub struct ReconcileResult {
     pub github_before: Option<CommitOid>,
     /// Initial Buzz tip, when read.
     pub buzz_before: Option<CommitOid>,
-    /// Current/approved GitHub target, when known.
+    /// Approved or requested GitHub target, when supplied.
     pub github_target: Option<CommitOid>,
     /// Trusted Buzz after-tip, when verified.
     pub buzz_after: Option<CommitOid>,
@@ -408,7 +446,7 @@ pub struct ReconcileResult {
     /// Whether deterministic retry is appropriate.
     pub retryable: bool,
     /// Stable operator action token.
-    pub next_action: String,
+    pub next_action: NextAction,
     /// Sanitized human summary.
     pub summary: String,
     /// Stable process outcome.

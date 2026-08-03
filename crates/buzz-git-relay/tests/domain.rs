@@ -1,6 +1,6 @@
 use buzz_git_relay::{
     ApprovalEventId, CommitOid, Enrollment, EnrollmentId, GithubRepositoryId, ManagedRef,
-    ReconcileRequest, RolloutPhase, RunId,
+    NextAction, ReconcileRequest, RolloutPhase, RunId,
 };
 
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -72,6 +72,15 @@ fn serialized_enrollment_contains_no_credentials_or_clone_urls() {
     assert!(!json.contains("token"));
     assert!(!json.contains("clone_url"));
     assert!(json.contains("github_repository_id"));
+}
+
+#[test]
+fn next_actions_serialize_as_closed_snake_case_tokens() {
+    assert_eq!(
+        serde_json::to_string(&NextAction::InspectCleanupFailure).unwrap(),
+        r#""inspect_cleanup_failure""#
+    );
+    assert!(serde_json::from_str::<NextAction>(r#""invented_action""#).is_err());
 }
 
 fn enrollment() -> Enrollment {

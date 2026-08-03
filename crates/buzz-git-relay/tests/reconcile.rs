@@ -1,8 +1,8 @@
 use buzz_git_relay::{
     ports::{EvidenceStore, LockLease, LockManager, RepositoryPort, RepositorySession},
     ApprovalEventId, Classification, CommitOid, Enrollment, EnrollmentId, GithubRepositoryId,
-    ManagedRef, MutationEvidence, PortError, PortErrorKind, ReconcileRequest, ReconcileResult,
-    Reconciler, ReplayKey, RunId, RunIdGenerator, Tips,
+    ManagedRef, MutationEvidence, NextAction, PortError, PortErrorKind, ReconcileRequest,
+    ReconcileResult, Reconciler, ReplayKey, RunId, RunIdGenerator, Tips,
 };
 use std::{
     collections::{HashSet, VecDeque},
@@ -33,7 +33,7 @@ async fn observe_reports_relay_behind_without_mutation() {
         MutationEvidence::None,
         1,
     );
-    assert_eq!(result.next_action, "approve_exact_fast_forward");
+    assert_eq!(result.next_action, NextAction::ApproveExactFastForward);
     assert!(fixture.state().pushes.is_empty());
 }
 
@@ -155,6 +155,7 @@ async fn apply_target_must_equal_fresh_github_tip() {
         MutationEvidence::None,
         1,
     );
+    assert_eq!(result.github_target, Some(oid(SHA_A)));
     assert!(fixture.state().pushes.is_empty());
 }
 
@@ -231,7 +232,7 @@ async fn github_change_before_push_freezes_old_approval() {
         MutationEvidence::None,
         1,
     );
-    assert_eq!(result.github_target, Some(oid(SHA_D)));
+    assert_eq!(result.github_target, Some(oid(SHA_B)));
 }
 
 #[tokio::test]
@@ -466,12 +467,12 @@ async fn session_close_failure_cannot_mask_machine_result() {
         MutationEvidence::None,
         1,
     );
-    assert_eq!(result.next_action, "inspect_cleanup_failure");
+    assert_eq!(result.next_action, NextAction::InspectCleanupFailure);
     assert_secret_free(&result);
 }
 
 #[tokio::test]
-async fn close_failure_after_push_preserves_unknown_mutation() {
+async fn close_failure_after_verified_push_preserves_fast_forward_evidence() {
     let fixture = Fixture::new(SHA_B, SHA_A)
         .ancestor(SHA_A, SHA_B)
         .close_error()
@@ -480,10 +481,10 @@ async fn close_failure_after_push_preserves_unknown_mutation() {
     assert_result(
         &result,
         Classification::VerifyError,
-        MutationEvidence::Unknown,
+        MutationEvidence::FastForward,
         1,
     );
-    assert_eq!(result.buzz_after, None);
+    assert_eq!(result.buzz_after, Some(oid(SHA_B)));
 }
 
 #[tokio::test]
@@ -500,6 +501,22 @@ async fn release_failure_cannot_mask_machine_result() {
 }
 
 #[tokio::test]
+async fn release_failure_after_verified_push_preserves_fast_forward_evidence() {
+    let fixture = Fixture::new(SHA_B, SHA_A)
+        .ancestor(SHA_A, SHA_B)
+        .release_error()
+        .apply_enabled();
+    let result = fixture.apply(SHA_B, APPROVAL).await;
+    assert_result(
+        &result,
+        Classification::VerifyError,
+        MutationEvidence::FastForward,
+        1,
+    );
+    assert_eq!(result.buzz_after, Some(oid(SHA_B)));
+}
+
+#[tokio::test]
 async fn audit_failure_returns_stable_secret_free_result() {
     let fixture = Fixture::new(SHA_A, SHA_A).append_error();
     let result = fixture.observe().await;
@@ -509,12 +526,12 @@ async fn audit_failure_returns_stable_secret_free_result() {
         MutationEvidence::None,
         1,
     );
-    assert_eq!(result.next_action, "repair_audit_store");
+    assert_eq!(result.next_action, NextAction::RepairAuditStore);
     assert_secret_free(&result);
 }
 
 #[tokio::test]
-async fn audit_failure_after_push_preserves_unknown_mutation() {
+async fn audit_failure_after_verified_push_preserves_fast_forward_evidence() {
     let fixture = Fixture::new(SHA_B, SHA_A)
         .ancestor(SHA_A, SHA_B)
         .append_error()
@@ -523,10 +540,10 @@ async fn audit_failure_after_push_preserves_unknown_mutation() {
     assert_result(
         &result,
         Classification::VerifyError,
-        MutationEvidence::Unknown,
+        MutationEvidence::FastForward,
         1,
     );
-    assert_eq!(result.buzz_after, None);
+    assert_eq!(result.buzz_after, Some(oid(SHA_B)));
 }
 
 #[tokio::test]

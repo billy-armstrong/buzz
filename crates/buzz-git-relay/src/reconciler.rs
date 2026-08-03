@@ -3,8 +3,8 @@ use crate::ports::{
     RepositorySession, RunIdGenerator,
 };
 use crate::{
-    Classification, CommitOid, Enrollment, ExitOutcome, MutationEvidence, ReconcileMode,
-    ReconcileRequest, ReconcileResult, ReplayKey, RolloutPhase, RunId, Tips,
+    Classification, CommitOid, Enrollment, ExitOutcome, MutationEvidence, NextAction,
+    ReconcileMode, ReconcileRequest, ReconcileResult, ReplayKey, RolloutPhase, RunId, Tips,
 };
 use std::sync::Arc;
 
@@ -47,7 +47,7 @@ impl Reconciler {
                     enrollment,
                     &request,
                     Classification::Unmanaged,
-                    "none",
+                    NextAction::None,
                     "Git-relay is disabled for this repository.",
                     false,
                 ))
@@ -60,7 +60,7 @@ impl Reconciler {
                     enrollment,
                     &request,
                     Classification::ConfigError,
-                    "fix_configuration",
+                    NextAction::FixConfiguration,
                     "Enrollment policy validation failed; Git-relay made no changes.",
                     false,
                 ))
@@ -75,13 +75,13 @@ impl Reconciler {
                     PortErrorKind::Transient => (
                         Classification::TransientError,
                         true,
-                        "retry_after_active_run",
+                        NextAction::RetryAfterActiveRun,
                         "Another Git-relay run holds this repository/ref lock.",
                     ),
                     _ => (
                         Classification::VerifyError,
                         false,
-                        "inspect_unexpected_failure",
+                        NextAction::InspectUnexpectedFailure,
                         "An unexpected lock boundary failed; inspect trusted host logs.",
                     ),
                 };
@@ -105,7 +105,7 @@ impl Reconciler {
             Err(error) => {
                 let result =
                     boundary_result(run_id, enrollment, &request, &error, false, None, None);
-                return self.finalize(result, None, Some(lease), false, false).await;
+                return self.finalize(result, None, Some(lease), false).await;
             }
         };
 
@@ -115,7 +115,7 @@ impl Reconciler {
                 let result =
                     boundary_result(run_id, enrollment, &request, &error, false, None, None);
                 return self
-                    .finalize(result, Some(session), Some(lease), false, false)
+                    .finalize(result, Some(session), Some(lease), false)
                     .await;
             }
         };
@@ -128,12 +128,12 @@ impl Reconciler {
             && !apply_authorized(enrollment, &request, &tips.github)
         {
             result.classification = Classification::ConfigError;
-            result.next_action = "provide_exact_target_and_approval".to_owned();
+            result.next_action = NextAction::ProvideExactTargetAndApproval;
             result.summary = "Apply requires Phase 2 enablement, the current GitHub target, and a valid approval event ID.".to_owned();
             result.outcome = ExitOutcome::Failure;
             result.exit_code = 1;
             return self
-                .finalize(result, Some(session), Some(lease), false, false)
+                .finalize(result, Some(session), Some(lease), false)
                 .await;
         }
 
@@ -146,6 +146,7 @@ impl Reconciler {
                     target: tips.github.clone(),
                     approval_event,
                 };
+                // Replay is valid only for the complete immutable delivery key.
                 match self.evidence.find_verified(&key).await {
                     Ok(Some(prior)) => {
                         return self
@@ -169,7 +170,7 @@ impl Reconciler {
                             buzz_before,
                         );
                         return self
-                            .finalize(result, Some(session), Some(lease), false, false)
+                            .finalize(result, Some(session), Some(lease), false)
                             .await;
                     }
                 }
@@ -189,7 +190,7 @@ impl Reconciler {
                     buzz_before,
                 );
                 return self
-                    .finalize(result, Some(session), Some(lease), false, false)
+                    .finalize(result, Some(session), Some(lease), false)
                     .await;
             }
         };
@@ -197,7 +198,7 @@ impl Reconciler {
 
         if request.mode != ReconcileMode::Apply || classification != Classification::RelayBehind {
             return self
-                .finalize(result, Some(session), Some(lease), false, false)
+                .finalize(result, Some(session), Some(lease), false)
                 .await;
         }
 
@@ -214,7 +215,7 @@ impl Reconciler {
                     buzz_before,
                 );
                 return self
-                    .finalize(result, Some(session), Some(lease), false, false)
+                    .finalize(result, Some(session), Some(lease), false)
                     .await;
             }
         };
@@ -226,7 +227,7 @@ impl Reconciler {
                 "Buzz reached the target before Git-relay pushed.",
             );
             return self
-                .finalize(result, Some(session), Some(lease), false, false)
+                .finalize(result, Some(session), Some(lease), false)
                 .await;
         }
         let still_safe = match session.is_ancestor(&current_buzz, &tips.github).await {
@@ -242,7 +243,7 @@ impl Reconciler {
                     buzz_before,
                 );
                 return self
-                    .finalize(result, Some(session), Some(lease), false, false)
+                    .finalize(result, Some(session), Some(lease), false)
                     .await;
             }
         };
@@ -260,7 +261,7 @@ impl Reconciler {
                         buzz_before,
                     );
                     return self
-                        .finalize(result, Some(session), Some(lease), false, false)
+                        .finalize(result, Some(session), Some(lease), false)
                         .await;
                 }
             };
@@ -273,21 +274,22 @@ impl Reconciler {
             if github_behind {
                 fail(
                     &mut result,
-                    "inspect_relay_only_commits",
+                    NextAction::InspectRelayOnlyCommits,
                     "Buzz advanced after classification and now contains relay-only commits.",
                 );
             } else {
                 fail(
                     &mut result,
-                    "review_divergent_histories",
+                    NextAction::ReviewDivergentHistories,
                     "Buzz changed after classification and the histories now diverge.",
                 );
             }
             return self
-                .finalize(result, Some(session), Some(lease), false, false)
+                .finalize(result, Some(session), Some(lease), false)
                 .await;
         }
 
+        // Keep this as the final remote read before the exact-ref push race fence.
         let before_push = match session.refresh_both().await {
             Ok(tips) => tips,
             Err(error) => {
@@ -301,21 +303,20 @@ impl Reconciler {
                     buzz_before,
                 );
                 return self
-                    .finalize(result, Some(session), Some(lease), false, false)
+                    .finalize(result, Some(session), Some(lease), false)
                     .await;
             }
         };
         if before_push.github != tips.github {
             result.classification = Classification::ConfigError;
-            result.github_target = Some(before_push.github);
             result.buzz_after = Some(before_push.buzz);
             fail(
                 &mut result,
-                "approve_new_github_target",
+                NextAction::ApproveNewGithubTarget,
                 "GitHub advanced after approval; Git-relay froze the old target.",
             );
             return self
-                .finalize(result, Some(session), Some(lease), false, false)
+                .finalize(result, Some(session), Some(lease), false)
                 .await;
         }
         if before_push.buzz != current_buzz {
@@ -330,12 +331,12 @@ impl Reconciler {
                 result.classification = Classification::VerifyError;
                 fail(
                     &mut result,
-                    "retry_after_concurrent_change",
+                    NextAction::RetryAfterConcurrentChange,
                     "Buzz changed during the final pre-push check; Git-relay froze without pushing.",
                 );
             }
             return self
-                .finalize(result, Some(session), Some(lease), false, false)
+                .finalize(result, Some(session), Some(lease), false)
                 .await;
         }
 
@@ -344,6 +345,7 @@ impl Reconciler {
             .push_exact(&tips.github, &enrollment.managed_ref)
             .await
             .err();
+        // A push response is not mutation evidence; only this immediate reread is.
         let after = session.refresh_both().await;
         match after {
             Ok(after) => {
@@ -371,13 +373,13 @@ impl Reconciler {
                         fail(&mut result, action, "The push failed and an immediate reread confirmed that Buzz did not change.");
                     } else {
                         result.classification = Classification::VerifyError;
-                        fail(&mut result, "inspect_ambiguous_push", "Buzz changed to an unexpected SHA during an attempted push; mutation attribution is unknown.");
+                        fail(&mut result, NextAction::InspectAmbiguousPush, "Buzz changed to an unexpected SHA during an attempted push; mutation attribution is unknown.");
                     }
                 } else {
                     result.classification = Classification::VerifyError;
                     let (action, summary) = if after.github != tips.github {
                         (
-                            "approve_new_github_target",
+                            NextAction::ApproveNewGithubTarget,
                             if result.mutation == MutationEvidence::FastForward {
                                 "Buzz reached the approved target, but GitHub advanced before post-push verification."
                             } else {
@@ -386,7 +388,7 @@ impl Reconciler {
                         )
                     } else {
                         (
-                            "inspect_post_push_refs",
+                            NextAction::InspectPostPushRefs,
                             "The push completed but post-push refs did not match the target.",
                         )
                     };
@@ -401,10 +403,10 @@ impl Reconciler {
                     .as_ref()
                     .is_some_and(|value| value.kind() == PortErrorKind::Transient)
                     || error.kind() == PortErrorKind::Transient;
-                fail(&mut result, "inspect_ambiguous_push", "A push was attempted, but its outcome could not be reread; mutation is unknown.");
+                fail(&mut result, NextAction::InspectAmbiguousPush, "A push was attempted, but its outcome could not be reread; mutation is unknown.");
             }
         }
-        self.finalize(result, Some(session), Some(lease), true, false)
+        self.finalize(result, Some(session), Some(lease), true)
             .await
     }
 
@@ -431,36 +433,17 @@ impl Reconciler {
         session: Option<Box<dyn RepositorySession>>,
         lease: Option<Box<dyn LockLease>>,
         push_attempted: bool,
-        replayed: bool,
     ) -> ReconcileResult {
-        let session_failed = match session {
-            Some(session) => session.close().await.is_err(),
-            None => false,
-        };
-        let lease_failed = match lease {
-            Some(lease) => lease.release().await.is_err(),
-            None => false,
-        };
-        if session_failed || lease_failed {
+        // Record after cleanup so cleanup failure and proved mutation remain one result.
+        if cleanup_failed(session, lease).await {
             result.classification = Classification::VerifyError;
             result.push_attempted = Some(push_attempted);
-            result.mutation = if push_attempted {
-                MutationEvidence::Unknown
-            } else {
-                MutationEvidence::None
-            };
-            if push_attempted {
-                result.buzz_after = None;
-            }
             fail(
                 &mut result,
-                "inspect_cleanup_failure",
+                NextAction::InspectCleanupFailure,
                 "Repository session cleanup failed; inspect trusted host logs.",
             );
             return self.record(result).await;
-        }
-        if replayed {
-            return result;
         }
         self.record(result).await
     }
@@ -472,15 +455,7 @@ impl Reconciler {
         session: Option<Box<dyn RepositorySession>>,
         lease: Option<Box<dyn LockLease>>,
     ) -> ReconcileResult {
-        let session_failed = match session {
-            Some(session) => session.close().await.is_err(),
-            None => false,
-        };
-        let lease_failed = match lease {
-            Some(lease) => lease.release().await.is_err(),
-            None => false,
-        };
-        if !session_failed && !lease_failed {
+        if !cleanup_failed(session, lease).await {
             return prior;
         }
 
@@ -491,7 +466,7 @@ impl Reconciler {
         result.mutation = MutationEvidence::None;
         fail(
             &mut result,
-            "inspect_cleanup_failure",
+            NextAction::InspectCleanupFailure,
             "Repository session cleanup failed; inspect trusted host logs.",
         );
         self.record(result).await
@@ -500,18 +475,29 @@ impl Reconciler {
     async fn record(&self, mut result: ReconcileResult) -> ReconcileResult {
         if self.evidence.append(&result).await.is_err() {
             result.classification = Classification::VerifyError;
-            if result.push_attempted == Some(true) {
-                result.mutation = MutationEvidence::Unknown;
-                result.buzz_after = None;
-            }
             fail(
                 &mut result,
-                "repair_audit_store",
+                NextAction::RepairAuditStore,
                 "Audit evidence could not be persisted; inspect trusted host logs.",
             );
         }
         result
     }
+}
+
+async fn cleanup_failed(
+    session: Option<Box<dyn RepositorySession>>,
+    lease: Option<Box<dyn LockLease>>,
+) -> bool {
+    let session_failed = match session {
+        Some(session) => session.close().await.is_err(),
+        None => false,
+    };
+    let lease_failed = match lease {
+        Some(lease) => lease.release().await.is_err(),
+        None => false,
+    };
+    session_failed || lease_failed
 }
 
 fn apply_authorized(
@@ -537,13 +523,12 @@ fn classified_result(
         enrollment,
         request,
         Classification::InSync,
-        "none",
+        NextAction::None,
         "GitHub and Buzz refs are in sync.",
         false,
     );
     result.github_before = Some(tips.github.clone());
     result.buzz_before = Some(tips.buzz.clone());
-    result.github_target = Some(tips.github.clone());
     result.buzz_after = Some(tips.buzz.clone());
     result
 }
@@ -558,7 +543,7 @@ fn apply_classification(
         Classification::InSync => succeed(result, "GitHub and Buzz refs are in sync."),
         Classification::RelayBehind => fail(
             result,
-            "approve_exact_fast_forward",
+            NextAction::ApproveExactFastForward,
             if mode == ReconcileMode::Observe {
                 "Buzz is behind GitHub; observe mode made no changes."
             } else {
@@ -567,12 +552,12 @@ fn apply_classification(
         ),
         Classification::GithubBehind => fail(
             result,
-            "inspect_relay_only_commits",
+            NextAction::InspectRelayOnlyCommits,
             "Buzz contains commits not present on GitHub; Git-relay froze.",
         ),
         Classification::Diverged => fail(
             result,
-            "review_divergent_histories",
+            NextAction::ReviewDivergentHistories,
             "GitHub and Buzz histories diverged; Git-relay froze.",
         ),
         _ => {}
@@ -604,7 +589,7 @@ fn boundary_result(
     );
     result.github_before = github_before.clone();
     result.buzz_before = buzz_before.clone();
-    result.github_target = request.expected_target.clone().or(github_before);
+    result.github_target = request.expected_target.clone();
     result.buzz_after = if push_attempted { None } else { buzz_before };
     result.push_attempted = Some(push_attempted);
     result.mutation = if push_attempted {
@@ -616,19 +601,27 @@ fn boundary_result(
     result
 }
 
-fn mapped_error(error: &PortError) -> (Classification, bool, &'static str) {
+fn mapped_error(error: &PortError) -> (Classification, bool, NextAction) {
     match error.kind() {
-        PortErrorKind::Config => (Classification::ConfigError, false, "fix_configuration"),
+        PortErrorKind::Config => (
+            Classification::ConfigError,
+            false,
+            NextAction::FixConfiguration,
+        ),
         PortErrorKind::Auth => (
             Classification::AuthError,
             false,
-            "repair_credentials_or_acl",
+            NextAction::RepairCredentialsOrAcl,
         ),
-        PortErrorKind::Transient => (Classification::TransientError, true, "retry_with_backoff"),
+        PortErrorKind::Transient => (
+            Classification::TransientError,
+            true,
+            NextAction::RetryWithBackoff,
+        ),
         PortErrorKind::Verify | PortErrorKind::Unexpected => (
             Classification::VerifyError,
             false,
-            "inspect_unexpected_failure",
+            NextAction::InspectUnexpectedFailure,
         ),
     }
 }
@@ -638,7 +631,7 @@ fn base_result(
     enrollment: &Enrollment,
     request: &ReconcileRequest,
     classification: Classification,
-    next_action: &str,
+    next_action: NextAction,
     summary: &str,
     retryable: bool,
 ) -> ReconcileResult {
@@ -659,7 +652,7 @@ fn base_result(
         push_attempted: Some(false),
         approval_event: request.approval_event.clone(),
         retryable,
-        next_action: next_action.to_owned(),
+        next_action,
         summary: summary.to_owned(),
         outcome: ExitOutcome::Failure,
         exit_code: 1,
@@ -667,14 +660,14 @@ fn base_result(
 }
 
 fn succeed(result: &mut ReconcileResult, summary: &str) {
-    result.next_action = "none".to_owned();
+    result.next_action = NextAction::None;
     result.summary = summary.to_owned();
     result.outcome = ExitOutcome::Success;
     result.exit_code = 0;
 }
 
-fn fail(result: &mut ReconcileResult, action: &str, summary: &str) {
-    result.next_action = action.to_owned();
+fn fail(result: &mut ReconcileResult, action: NextAction, summary: &str) {
+    result.next_action = action;
     result.summary = summary.to_owned();
     result.outcome = ExitOutcome::Failure;
     result.exit_code = 1;

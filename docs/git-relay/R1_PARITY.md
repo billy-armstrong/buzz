@@ -64,9 +64,10 @@ native parsing and command integration remain R2 work.
 | Repointed repository identity cannot replay | `repointed_repository_identity_cannot_reuse_old_evidence` |
 | Busy lock is retryable | `busy_lock_is_retryable_and_does_not_open_repository` |
 | Session close failure is structured | `session_close_failure_cannot_mask_machine_result` |
-| Cleanup failure after push is unknown | `close_failure_after_push_preserves_unknown_mutation` |
+| Session close after verified delivery preserves fast-forward evidence | `close_failure_after_verified_push_preserves_fast_forward_evidence` |
 | Lock release failure is structured | `release_failure_cannot_mask_machine_result` |
-| Evidence append failure is structured | `audit_failure_returns_stable_secret_free_result` and `audit_failure_after_push_preserves_unknown_mutation` |
+| Lock release after verified delivery preserves fast-forward evidence | `release_failure_after_verified_push_preserves_fast_forward_evidence` |
+| Evidence append failure is structured without erasing verified delivery | `audit_failure_returns_stable_secret_free_result` and `audit_failure_after_verified_push_preserves_fast_forward_evidence` |
 
 The Rust suite additionally exercises missing-ref boundary classification,
 evidence lookup failure, ancestry failure, pre-push refresh failure, a Buzz
@@ -89,11 +90,12 @@ must perform channel/repository/ACL lookup before constructing it.
 | Buzz owner/repository mismatch is rejected | host adapter responsibility; no owner/URL strings can enter the R1 state machine |
 | Inert credential profiles are rejected | no credential-profile field or credential material exists in the R1 API |
 
-The remaining value-validation cases are covered by all nine tests in
+The remaining value-validation cases are covered by all ten tests in
 `tests/domain.rs`: opaque identity validation, exact 40-hex commit IDs, exact
 64-hex approval IDs, the one-ref allowlist, observe-only defaults, exact apply
-binding, absence of credential/URL fields, and rejection of malformed values
-at the Serde boundary so deserialization cannot bypass the constructors.
+binding, closed next-action serialization, absence of credential/URL fields,
+and rejection of malformed values at the Serde boundary so deserialization
+cannot bypass the constructors.
 
 ### Real Git transport (4 TypeScript tests)
 
@@ -125,8 +127,8 @@ publication path instead of adding another production ref writer.
 
 ## R1 acceptance evidence
 
-- Exactly 55 Rust tests cover the mapped prototype matrix and added race
-  regressions: 42 reconciliation, 9 domain, and 4 disposable-real-Git tests.
+- Exactly 57 Rust tests cover the mapped prototype matrix and added race
+  regressions: 43 reconciliation, 10 domain, and 4 disposable-real-Git tests.
 - `ManagedRef` accepts only `refs/heads/main`.
 - `CommitOid` and `ApprovalEventId` reject malformed values.
 - Deserialization preserves every validated ID, SHA, approval, and ref
