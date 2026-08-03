@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::fmt;
 
 /// A validated domain value was malformed.
@@ -8,10 +8,24 @@ pub struct ValidationError {
     field: &'static str,
 }
 
+macro_rules! validated_deserialize {
+    ($name:ident) => {
+        impl<'de> Deserialize<'de> for $name {
+            fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+            where
+                D: Deserializer<'de>,
+            {
+                let value = String::deserialize(deserializer)?;
+                Self::new(value).map_err(serde::de::Error::custom)
+            }
+        }
+    };
+}
+
 macro_rules! nonempty_id {
     ($name:ident, $field:literal, $docs:literal) => {
         #[doc = $docs]
-        #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
         #[serde(transparent)]
         pub struct $name(String);
 
@@ -36,6 +50,8 @@ macro_rules! nonempty_id {
                 formatter.write_str(&self.0)
             }
         }
+
+        validated_deserialize!($name);
     };
 }
 
@@ -56,7 +72,7 @@ nonempty_id!(
 );
 
 /// A full Git object ID accepted by the v1 controller.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct CommitOid(String);
 
@@ -88,8 +104,10 @@ impl fmt::Display for CommitOid {
     }
 }
 
+validated_deserialize!(CommitOid);
+
 /// A validated 32-byte Nostr event ID.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct ApprovalEventId(String);
 
@@ -115,8 +133,10 @@ impl ApprovalEventId {
     }
 }
 
+validated_deserialize!(ApprovalEventId);
+
 /// The one exact destination ref managed by an enrollment.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
 pub struct ManagedRef(String);
 
@@ -142,6 +162,8 @@ impl ManagedRef {
         &self.0
     }
 }
+
+validated_deserialize!(ManagedRef);
 
 /// Rollout gate for one enrolled repository.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

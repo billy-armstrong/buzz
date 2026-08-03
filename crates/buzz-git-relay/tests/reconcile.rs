@@ -235,6 +235,23 @@ async fn github_change_before_push_freezes_old_approval() {
 }
 
 #[tokio::test]
+async fn buzz_change_during_final_pre_push_check_freezes_without_push() {
+    let fixture = Fixture::new(SHA_B, SHA_A)
+        .ancestor(SHA_A, SHA_B)
+        .refresh_both(vec![Ok(tips(SHA_B, SHA_D))])
+        .apply_enabled();
+    let result = fixture.apply(SHA_B, APPROVAL).await;
+    assert_result(
+        &result,
+        Classification::VerifyError,
+        MutationEvidence::None,
+        1,
+    );
+    assert_eq!(result.buzz_after, Some(oid(SHA_D)));
+    assert!(fixture.state().pushes.is_empty());
+}
+
+#[tokio::test]
 async fn rejected_push_with_unchanged_buzz_records_no_mutation() {
     let fixture = Fixture::new(SHA_B, SHA_A)
         .ancestor(SHA_A, SHA_B)

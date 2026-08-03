@@ -201,37 +201,6 @@ impl Reconciler {
                 .await;
         }
 
-        let before_push = match session.refresh_both().await {
-            Ok(tips) => tips,
-            Err(error) => {
-                let result = boundary_result(
-                    result.run_id.clone(),
-                    enrollment,
-                    &request,
-                    &error,
-                    false,
-                    github_before,
-                    buzz_before,
-                );
-                return self
-                    .finalize(result, Some(session), Some(lease), false, false)
-                    .await;
-            }
-        };
-        if before_push.github != tips.github {
-            result.classification = Classification::ConfigError;
-            result.github_target = Some(before_push.github);
-            result.buzz_after = Some(before_push.buzz);
-            fail(
-                &mut result,
-                "approve_new_github_target",
-                "GitHub advanced after approval; Git-relay froze the old target.",
-            );
-            return self
-                .finalize(result, Some(session), Some(lease), false, false)
-                .await;
-        }
-
         let current_buzz = match session.refresh_buzz().await {
             Ok(tip) => tip,
             Err(error) => {
@@ -312,6 +281,57 @@ impl Reconciler {
                     &mut result,
                     "review_divergent_histories",
                     "Buzz changed after classification and the histories now diverge.",
+                );
+            }
+            return self
+                .finalize(result, Some(session), Some(lease), false, false)
+                .await;
+        }
+
+        let before_push = match session.refresh_both().await {
+            Ok(tips) => tips,
+            Err(error) => {
+                let result = boundary_result(
+                    result.run_id.clone(),
+                    enrollment,
+                    &request,
+                    &error,
+                    false,
+                    github_before,
+                    buzz_before,
+                );
+                return self
+                    .finalize(result, Some(session), Some(lease), false, false)
+                    .await;
+            }
+        };
+        if before_push.github != tips.github {
+            result.classification = Classification::ConfigError;
+            result.github_target = Some(before_push.github);
+            result.buzz_after = Some(before_push.buzz);
+            fail(
+                &mut result,
+                "approve_new_github_target",
+                "GitHub advanced after approval; Git-relay froze the old target.",
+            );
+            return self
+                .finalize(result, Some(session), Some(lease), false, false)
+                .await;
+        }
+        if before_push.buzz != current_buzz {
+            result.buzz_after = Some(before_push.buzz.clone());
+            if before_push.buzz == tips.github {
+                result.classification = Classification::InSync;
+                succeed(
+                    &mut result,
+                    "Buzz reached the target before Git-relay pushed.",
+                );
+            } else {
+                result.classification = Classification::VerifyError;
+                fail(
+                    &mut result,
+                    "retry_after_concurrent_change",
+                    "Buzz changed during the final pre-push check; Git-relay froze without pushing.",
                 );
             }
             return self

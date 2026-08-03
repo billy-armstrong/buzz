@@ -62,9 +62,9 @@ pub trait RepositorySession: Send {
         ancestor: &CommitOid,
         descendant: &CommitOid,
     ) -> Result<bool, PortError>;
-    /// Re-reads only the Buzz managed tip immediately before mutation.
+    /// Re-reads only the Buzz managed tip for concurrent-change classification.
     async fn refresh_buzz(&mut self) -> Result<CommitOid, PortError>;
-    /// Re-reads both tips for race detection and verification.
+    /// Re-reads both tips for the final pre-mutation race check and verification.
     async fn refresh_both(&mut self) -> Result<Tips, PortError>;
     /// Pushes one exact source SHA to one exact destination ref.
     async fn push_exact(

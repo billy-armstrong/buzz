@@ -38,6 +38,7 @@ access information.
 crates/
   # Relay + core
   buzz-relay          # WebSocket relay server — main entry point; also hosts git + huddle audio
+  buzz-git-relay      # Deterministic GitHub-to-Buzz reconciliation core
   buzz-core           # Core types, event verification, filter matching, kind registry
   buzz-db             # Postgres event store and data access layer
   buzz-auth           # Authentication and authorization

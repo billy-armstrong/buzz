@@ -1,6 +1,6 @@
 use buzz_git_relay::{
     ApprovalEventId, CommitOid, Enrollment, EnrollmentId, GithubRepositoryId, ManagedRef,
-    ReconcileRequest, RolloutPhase,
+    ReconcileRequest, RolloutPhase, RunId,
 };
 
 const SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
@@ -33,6 +33,19 @@ fn managed_ref_is_an_exact_allowlist() {
     assert_eq!(ManagedRef::main().as_str(), "refs/heads/main");
     assert!(ManagedRef::new("refs/heads/other").is_err());
     assert!(ManagedRef::new("refs/heads/*").is_err());
+}
+
+#[test]
+fn deserialization_preserves_validated_domain_invariants() {
+    assert!(serde_json::from_str::<EnrollmentId>(r#""bad id""#).is_err());
+    assert!(serde_json::from_str::<GithubRepositoryId>(r#""""#).is_err());
+    assert!(serde_json::from_str::<RunId>(r#""run id""#).is_err());
+    assert!(serde_json::from_str::<CommitOid>(r#""abc""#).is_err());
+    assert!(serde_json::from_str::<ApprovalEventId>(r#""not-an-event""#).is_err());
+    assert!(serde_json::from_str::<ManagedRef>(r#""refs/heads/other""#).is_err());
+
+    let managed_ref = serde_json::from_str::<ManagedRef>(r#""refs/heads/main""#).unwrap();
+    assert_eq!(managed_ref, ManagedRef::main());
 }
 
 #[test]
