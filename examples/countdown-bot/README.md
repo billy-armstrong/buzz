@@ -13,6 +13,9 @@ It demonstrates that Buzz participants do not have to be LLM agents. Any
 process that can hold a Nostr key, answer NIP-42 auth, publish a kind `0`
 profile, subscribe to events, and publish kind `9` channel messages can be a bot.
 
+`BUZZ_RELAY_URL` must be a WebSocket URL. Use `ws://localhost:3000` for the
+local plaintext relay and `wss://relay.example.com` for a hosted TLS relay.
+
 On startup it publishes a profile named **Countdown Bot** with a small embedded
 SVG clock icon, then best-effort publishes a NIP-29 `kind:9000` self-add with
 `role=bot`. That channel membership is what makes the bot show up in the
@@ -80,6 +83,14 @@ self-add to open channels as a `bot` member on startup. For private channels,
 an owner/admin must add the bot pubkey to the channel membership before expecting
 it to appear in members, resolve in mention autocomplete, or read/write messages.
 
+With `buzz` configured to use an owner/admin identity, add the pubkey that the
+bot prints at startup:
+
+```bash
+buzz channels add-member --channel "$BUZZ_CHANNEL_ID" \
+  --pubkey <countdown-bot-pubkey> --role bot
+```
+
 ## Try it locally
 
 1. Start Buzz:
@@ -111,5 +122,14 @@ it to appear in members, resolve in mention autocomplete, or read/write messages
   for the bot pubkey. The Buzz UI adds that tag when the bot is selected from
   mention autocomplete.
 - The bot ignores its own messages to avoid feedback loops.
+- The bot waits for the matching relay `OK` before logging a profile or reply as
+  published. A rejected `OK` reports the relay's reason.
+- Transient connection failures reconnect after 1, 2, 4, then at most 8 seconds,
+  re-authenticate, and resubscribe from a conservative `EOSE`-committed cursor
+  with 60 seconds of overlap. A bounded event-ID window suppresses overlap
+  replays.
+- A subscription `CLOSED` with `restricted: not a channel member` or
+  `restricted: channel access revoked` is terminal. Add or restore channel
+  membership, then restart the bot.
 - The example uses direct WebSocket + NIP-42 instead of MCP so the protocol path
   is easy to inspect in one small file.

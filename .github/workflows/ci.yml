@@ -38,6 +38,7 @@ jobs:
           filters: |
             rust:
               - 'crates/**'
+              - 'examples/countdown-bot/**'
               - 'migrations/**'
               - 'schema/**'
               - 'Cargo.toml'

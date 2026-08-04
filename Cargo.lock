@@ -1815,12 +1815,17 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "buzz-sdk",
+ "buzz-ws-client",
  "futures-util",
  "nostr",
+ "rustls",
  "serde_json",
  "tokio",
  "tokio-tungstenite 0.29.0",
+ "tracing",
+ "tracing-subscriber",
  "url",
+ "uuid",
 ]
 
 [[package]]

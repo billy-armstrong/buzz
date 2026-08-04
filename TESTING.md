@@ -206,8 +206,9 @@ AGENT_PUBKEY=$(echo "$AGENT_GEN" | awk '/Public key:/ {print $3}')
 buzz channels add-member --channel "$CHANNEL" --pubkey "$AGENT_PUBKEY" --role member
 
 # 4. Switch to the agent identity and start it.
-#    buzz-acp wants ws:// (not http://). If you set BUZZ_RELAY_URL to an
-#    http:// URL in step 3, set the ws:// equivalent here — same host/port.
+#    buzz-acp requires a WebSocket URL: use ws:// for a local plaintext relay
+#    and wss:// for a hosted TLS relay. Map http:// -> ws:// and
+#    https:// -> wss:// while keeping the same host/port.
 export BUZZ_PRIVATE_KEY="$AGENT_SK"
 export BUZZ_RELAY_URL=ws://localhost:3000   # match step 3 (e.g. ws://localhost:3030 if overridden)
 export BUZZ_ACP_RESPOND_TO=anyone           # default is owner-only; opens the gate for testing
@@ -299,7 +300,9 @@ CLI-side, only two matter for testing:
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `relay error 500` or `400: restricted: not a channel member` after a code change | Stale binary | Rebuild and re-export `PATH`; or `cargo run` directly |
+| CLI or relay behavior does not reflect a local code change | The shell is running an older installed binary | Run `type -a buzz buzz-relay`; use `cargo run -p buzz-cli -- …` or `cargo run -p buzz-relay` to run the workspace code directly |
+| `400: restricted: not a channel member` | The current signing identity is not an active member of the private channel | Have a channel admin run `buzz channels add-member --channel "$CHANNEL" --pubkey "$PUBKEY" --role member`; relay admission alone does not grant channel membership |
+| `relay error 500` | The relay hit an internal error | Inspect the relay log for the recorded cause; the HTTP status alone does not identify it |
 | `Address already in use` on relay start (os error 48 on macOS, 98 on Linux) | Another relay (or stale process) holding `:3000` / `:8080` / `:9102` (or your override ports) | The panic line names the failing port — read it first. Then `lsof -iTCP:3000,8080,9102 -sTCP:LISTEN` (or your override equivalents). Kill the offender (`pkill -f buzz-relay`) or use the port-override block in step 3. If you already overrode and *still* collide, a prior reviewer left a relay running on the same alt ports — kill it or pick fresh ports |
 | `auth_error: BUZZ_PRIVATE_KEY is required` | Env not exported into the CLI's shell | `export BUZZ_PRIVATE_KEY=...` (or pass `--private-key`) |
 | `auth_error: BUZZ_AUTH_TAG verification failed … signature verification failed` | A stale `BUZZ_AUTH_TAG` inherited from a parent shell. The local dev relay rejects it. | `unset BUZZ_AUTH_TAG` (see the scrub block in step 1) |

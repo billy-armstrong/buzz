@@ -51,7 +51,7 @@ pre-push:
     branch-skew:
       run: ./scripts/check-branch-skew.sh
     rust-tests:
-      glob: ["crates/**", "migrations/**", "schema/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "deny.toml", "scripts/run-tests.sh", "justfile"]
+      glob: ["crates/**", "examples/countdown-bot/**", "migrations/**", "schema/**", "Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "deny.toml", "scripts/run-tests.sh", "justfile"]
       run: just test-unit
     desktop-check:
       glob: ["desktop/**", "pnpm-lock.yaml"]
